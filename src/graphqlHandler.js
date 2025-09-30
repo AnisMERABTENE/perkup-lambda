@@ -23,6 +23,11 @@ import { handler as reactivateSubscriptionHandler } from './handlers/subscriptio
 import { createStoreHandler, updateStoreHandler, getVendorProfileHandler, getVendorStoresHandler } from './handlers/vendor/storeHandler.js';
 import { searchPartnersHandler, getPartnersHandler, getPartnerHandler, getCategoriesHandler, getCitiesHandler, getCityCoordinatesHandler } from './handlers/vendor/partnerHandler.js';
 
+// Import des handlers cartes digitales
+import { getMyDigitalCardHandler, toggleDigitalCardHandler, getCardUsageHistoryHandler, resetDigitalCardHandler } from './handlers/digitalCard/cardHandler.js';
+import { validateDigitalCardHandler, getVendorValidationsHandler } from './handlers/digitalCard/validationHandler.js';
+import { getMyCouponsHandler, generateCouponHandler, useCouponHandler, verifyCouponHandler } from './handlers/digitalCard/couponHandler.js';
+
 // Import middleware subscription production
 import { withSubscription, withAuth, SUBSCRIPTION_PLANS } from './middlewares/checkSubscription.js';
 
@@ -58,10 +63,11 @@ const typeDefs = `
     getVendorProfile: VendorProfile!
     getVendorStores: VendorStoresResponse!
     
-    # Access to all content (with discount capping)
-    premiumContent: PremiumContent
-    vipZone: VipContent
-    advancedFeatures: AdvancedFeatures
+    # Digital Card queries
+    getMyDigitalCard: DigitalCardResponse!
+    getCardUsageHistory: CardUsageResponse!
+    getMyCoupons(status: String, limit: Int, page: Int): CouponHistoryResponse!
+    verifyCoupon(code: String!): CouponVerificationResponse!
   }
 
   type Mutation {
@@ -79,6 +85,15 @@ const typeDefs = `
     # Vendor/Store mutations
     createStore(input: CreateStoreInput!): CreateStoreResponse!
     updateStore(input: UpdateStoreInput!): UpdateStoreResponse!
+    
+    # Digital Card mutations
+    toggleDigitalCard: ToggleCardResponse!
+    resetDigitalCard: MessageResponse!
+    
+    # Coupon mutations
+    generateCoupon(input: GenerateCouponInput!): GenerateCouponResponse!
+    useCoupon(input: UseCouponInput!): UseCouponResponse!
+    validateDigitalCard(input: ValidateCardInput!): CardValidationResponse!
   }
 
   # Auth Types
@@ -378,6 +393,165 @@ const typeDefs = `
     message: String!
     store: Store!
   }
+  
+  # Digital Card Types
+  type DigitalCard {
+    cardNumber: String!
+    qrCode: String!
+    qrCodeData: String!
+    isActive: Boolean!
+    validUntil: String!
+    timeUntilRotation: Int!
+    userPlan: String!
+    userInfo: UserInfo!
+  }
+  
+  type UserInfo {
+    name: String!
+    email: String!
+  }
+  
+  type DigitalCardResponse {
+    card: DigitalCard!
+    instructions: String!
+    security: SecurityInfo!
+  }
+  
+  type SecurityInfo {
+    tokenRotates: String!
+    currentlyValid: String!
+  }
+  
+  type CardUsage {
+    totalScans: Int!
+    recentUsage: [RecentUsage!]!
+  }
+  
+  type RecentUsage {
+    usedAt: String!
+    token: String!
+  }
+  
+  type CardUsageResponse {
+    card: BasicCardInfo!
+    usage: CardUsage!
+    security: SecurityInfo!
+  }
+  
+  type BasicCardInfo {
+    cardNumber: String!
+    createdAt: String!
+    isActive: Boolean!
+  }
+  
+  type ToggleCardResponse {
+    message: String!
+    card: BasicCardInfo!
+  }
+  
+  # Coupon Types
+  type CouponDetail {
+    id: ID!
+    code: String!
+    partner: Partner
+    discountApplied: Int!
+    originalAmount: Float
+    discountAmount: Float
+    finalAmount: Float
+    status: String!
+    createdAt: String!
+    usedAt: String
+    expiresAt: String
+    isDigitalCard: Boolean!
+    type: String!
+  }
+  
+  type CouponStats {
+    totalSavings: Float!
+    digitalCardTransactions: Int!
+    digitalCardSavings: Float!
+    couponTransactions: Int!
+    couponSavings: Float!
+  }
+  
+  type CouponPagination {
+    current: Int!
+    total: Int!
+    count: Int!
+    totalCoupons: Int!
+  }
+  
+  type CouponHistoryResponse {
+    coupons: [CouponDetail!]!
+    pagination: CouponPagination!
+    stats: CouponStats!
+  }
+  
+  input GenerateCouponInput {
+    partnerId: ID!
+    originalAmount: Float
+  }
+  
+  type GenerateCouponResponse {
+    message: String!
+    coupon: CouponDetail!
+  }
+  
+  input UseCouponInput {
+    code: String!
+    actualAmount: Float!
+  }
+  
+  type UseCouponResponse {
+    message: String!
+    coupon: CouponDetail!
+  }
+  
+  input ValidateCardInput {
+    scannedToken: String!
+    amount: Float!
+    partnerId: ID
+  }
+  
+  type ClientInfo {
+    name: String!
+    email: String!
+    cardNumber: String!
+    plan: String!
+  }
+  
+  type DiscountInfo {
+    offered: Int!
+    applied: Int!
+    reason: String!
+  }
+  
+  type AmountInfo {
+    original: Float!
+    discount: Float!
+    final: Float!
+    savings: Float!
+  }
+  
+  type ValidationInfo {
+    timestamp: String!
+    tokenWindow: Int!
+    validatedBy: ID!
+  }
+  
+  type CardValidationResponse {
+    valid: Boolean!
+    client: ClientInfo!
+    partner: Partner
+    discount: DiscountInfo!
+    amounts: AmountInfo!
+    validation: ValidationInfo!
+  }
+  
+  type CouponVerificationResponse {
+    exists: Boolean!
+    coupon: CouponDetail
+  }
 `;
 
 // Résolveurs GraphQL avec middleware production
@@ -433,23 +607,6 @@ const resolvers = {
       };
     }),
     
-    // Accès au contenu (tous les plans)
-    premiumContent: withSubscription()(async (_, __, context) => {
-      const subscription = context.userSubscription;
-      
-      const maxDiscounts = {
-        basic: 5,
-        super: 10,
-        premium: 100
-      };
-      
-      return {
-        message: "Accès à tous les partenaires",
-        userPlan: subscription.plan,
-        maxDiscount: maxDiscounts[subscription.plan] || 5
-      };
-    }),
-    
     // Partner/Store queries
     searchPartners: withAuth(async (_, args, context) => {
       const event = { args, context };
@@ -478,11 +635,46 @@ const resolvers = {
       return await getCityCoordinatesHandler();
     }),
     
+    // Digital Card queries (role client requis)
+    getMyDigitalCard: withAuth(async (_, __, context) => {
+      const event = { context };
+      
+      if (context.user.role !== 'client') {
+        throw new Error('Accès réservé aux clients');
+      }
+      
+      return await getMyDigitalCardHandler(event);
+    }),
+    
+    getCardUsageHistory: withAuth(async (_, __, context) => {
+      const event = { context };
+      
+      if (context.user.role !== 'client') {
+        throw new Error('Accès réservé aux clients');
+      }
+      
+      return await getCardUsageHistoryHandler(event);
+    }),
+    
+    getMyCoupons: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      
+      if (context.user.role !== 'client') {
+        throw new Error('Accès réservé aux clients');
+      }
+      
+      return await getMyCouponsHandler(event);
+    }),
+    
+    verifyCoupon: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      return await verifyCouponHandler(event);
+    }),
+    
     // Vendor queries (role vendor requis)
     getVendorProfile: withAuth(async (_, __, context) => {
       const event = { context };
       
-      // Vérifier le rôle vendeur
       if (context.user.role !== 'vendor') {
         throw new Error('Accès réservé aux vendeurs');
       }
@@ -493,31 +685,11 @@ const resolvers = {
     getVendorStores: withAuth(async (_, __, context) => {
       const event = { context };
       
-      // Vérifier le rôle vendeur
       if (context.user.role !== 'vendor') {
         throw new Error('Accès réservé aux vendeurs');
       }
       
       return await getVendorStoresHandler(event);
-    }),
-    
-    // Zone VIP - nécessite abonnement premium uniquement
-    vipZone: withSubscription(SUBSCRIPTION_PLANS.PREMIUM)(async (_, __, context) => {
-      return {
-        message: "Bienvenue dans la zone VIP",
-        discount: "15% de réduction sur tous les partenaires"
-      };
-    }),
-    
-    // Fonctionnalités avancées - nécessite super ou premium
-    advancedFeatures: withSubscription([SUBSCRIPTION_PLANS.SUPER, SUBSCRIPTION_PLANS.PREMIUM])(async (_, __, context) => {
-      const subscription = context.userSubscription;
-      
-      return {
-        message: "Fonctionnalités avancées accessibles",
-        userPlan: subscription.plan,
-        features: subscription.features
-      };
     })
   },
 
@@ -580,6 +752,58 @@ const resolvers = {
       }
       
       return await updateStoreHandler(event);
+    }),
+    
+    // Digital Card mutations
+    toggleDigitalCard: withAuth(async (_, __, context) => {
+      const event = { context };
+      
+      if (context.user.role !== 'client') {
+        throw new Error('Accès réservé aux clients');
+      }
+      
+      return await toggleDigitalCardHandler(event);
+    }),
+    
+    resetDigitalCard: withAuth(async (_, __, context) => {
+      const event = { context };
+      
+      if (context.user.role !== 'client') {
+        throw new Error('Accès réservé aux clients');
+      }
+      
+      return await resetDigitalCardHandler(event);
+    }),
+    
+    // Coupon mutations
+    generateCoupon: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      
+      if (context.user.role !== 'client') {
+        throw new Error('Seuls les clients peuvent générer des coupons');
+      }
+      
+      return await generateCouponHandler(event);
+    }),
+    
+    useCoupon: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      
+      if (context.user.role !== 'vendor') {
+        throw new Error('Seuls les vendeurs peuvent utiliser des coupons');
+      }
+      
+      return await useCouponHandler(event);
+    }),
+    
+    validateDigitalCard: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      
+      if (context.user.role !== 'vendor') {
+        throw new Error('Seuls les vendeurs peuvent valider des cartes');
+      }
+      
+      return await validateDigitalCardHandler(event);
     })
   }
 };
