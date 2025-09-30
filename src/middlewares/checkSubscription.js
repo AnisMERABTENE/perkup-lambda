@@ -1,4 +1,6 @@
 import User from '../models/User.js';
+import { SubscriptionCache } from '../services/cache/strategies/subscriptionCache.js';
+import { UserCache } from '../services/cache/strategies/userCache.js';
 
 // Middleware GraphQL robuste pour production
 export const withSubscription = (requiredPlan = null) => {
@@ -10,66 +12,39 @@ export const withSubscription = (requiredPlan = null) => {
           throw new Error('Authentification requise');
         }
 
-        // Récupération utilisateur complet
-        const userData = await User.findById(context.user.id);
+        // Récupération utilisateur complet avec cache
+        const userData = await UserCache.getUser(context.user.id);
         if (!userData) {
-          throw new Error('Utilisateur introuvable');
+        throw new Error('Utilisateur introuvable');
         }
 
-        const subscription = userData.subscription;
+        // Récupération des features d'abonnement avec cache
+        const subscriptionFeatures = await SubscriptionCache.getSubscriptionFeatures(context.user.id);
         
-        // Vérification abonnement actif
-        if (!subscription || subscription.status !== 'active') {
-          throw new Error('Abonnement actif requis');
-        }
-
-        // Vérification expiration avec gestion des deux systèmes
-        let isExpired = false;
-        const now = new Date();
-        
-        if (subscription.stripeSubscriptionId && subscription.currentPeriodEnd) {
-          // Système Stripe natif
-          isExpired = now > new Date(subscription.currentPeriodEnd);
-        } else if (subscription.endDate) {
-          // Ancien système PaymentIntent
-          isExpired = now > new Date(subscription.endDate);
-        } else {
-          // Aucune date trouvée - considérer comme expiré
-          isExpired = true;
-        }
-
-        if (isExpired) {
-          // Mise à jour atomique du statut
-          await User.findByIdAndUpdate(context.user.id, {
-            $set: { 
-              'subscription.status': 'inactive',
-              'subscription.updatedAt': now
-            }
-          });
-          throw new Error('Abonnement expiré');
+        if (!subscriptionFeatures || !subscriptionFeatures.isActive) {
+        throw new Error('Abonnement actif requis');
         }
 
         // Vérification du plan requis
         if (requiredPlan) {
           const requiredPlans = Array.isArray(requiredPlan) ? requiredPlan : [requiredPlan];
           
-          if (!requiredPlans.includes(subscription.plan)) {
+          if (!requiredPlans.includes(subscriptionFeatures.plan)) {
             throw new Error(
-              `Plan ${requiredPlans.join(' ou ')} requis. Plan actuel: ${subscription.plan || 'aucun'}`
+              `Plan ${requiredPlans.join(' ou ')} requis. Plan actuel: ${subscriptionFeatures.plan || 'aucun'}`
             );
           }
         }
 
-        // Enrichissement du contexte avec données subscription
+        // Enrichissement du contexte avec données subscription en cache
         const enrichedContext = {
           ...context,
           userSubscription: {
-            plan: subscription.plan,
-            status: subscription.status,
-            isActive: true,
-            currentPeriodEnd: subscription.currentPeriodEnd,
-            stripeSubscriptionId: subscription.stripeSubscriptionId,
-            features: getFeaturesByPlan(subscription.plan)
+            plan: subscriptionFeatures.plan,
+            status: subscriptionFeatures.status,
+            isActive: subscriptionFeatures.isActive,
+            features: subscriptionFeatures.features,
+            maxDiscount: subscriptionFeatures.maxDiscount
           }
         };
 

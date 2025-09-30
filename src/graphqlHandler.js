@@ -22,6 +22,9 @@ import { handler as reactivateSubscriptionHandler } from './handlers/subscriptio
 // Import middleware subscription production
 import { withSubscription, withAuth, SUBSCRIPTION_PLANS } from './middlewares/checkSubscription.js';
 
+// Import du système de cache
+import { AuthCache } from './services/cache/strategies/authCache.js';
+
 dotenv.config();
 
 // Schéma GraphQL complet
@@ -35,6 +38,9 @@ const typeDefs = `
     
     # Discount system
     getPartnerDiscount(partnerDiscount: Int!): DiscountResponse!
+    
+    # Cache health check
+    cacheHealth: CacheHealth!
     
     # Access to all content (with discount capping)
     premiumContent: PremiumContent
@@ -155,6 +161,13 @@ const typeDefs = `
     userPlan: String!
     features: [String!]!
   }
+  
+  type CacheHealth {
+    status: String!
+    latency: String
+    connected: Boolean!
+    error: String
+  }
 `;
 
 // Résolveurs GraphQL avec middleware production
@@ -178,6 +191,12 @@ const resolvers = {
       const event = { context };
       return await getSubscriptionStatusHandler(event);
     }),
+    
+    // Health check du cache Redis
+    cacheHealth: async () => {
+      const cacheService = (await import('./services/cache/cacheService.js')).default;
+      return await cacheService.health();
+    },
     
     // Système de plafonnement des réductions
     getPartnerDiscount: withSubscription()(async (_, { partnerDiscount }, context) => {
@@ -281,7 +300,7 @@ const resolvers = {
   }
 };
 
-// Fonction pour extraire l'utilisateur du token
+// Fonction pour extraire l'utilisateur du token avec cache
 const getUser = async (event) => {
   try {
     const authHeader = event.headers?.Authorization || event.headers?.authorization;
@@ -289,9 +308,11 @@ const getUser = async (event) => {
     if (!authHeader) return null;
     
     const token = authHeader.replace('Bearer ', '');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    return decoded;
+    // Utiliser le cache d'authentification
+    const authenticatedUser = await AuthCache.authenticateUser(token);
+    
+    return authenticatedUser;
   } catch (error) {
     console.log('Erreur auth:', error.message);
     return null;

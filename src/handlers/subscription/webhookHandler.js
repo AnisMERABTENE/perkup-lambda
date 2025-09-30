@@ -1,6 +1,8 @@
 import Stripe from 'stripe';
 import User from '../../models/User.js';
 import { connectDB } from '../../services/db.js';
+import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
+import { UserCache } from '../../services/cache/strategies/userCache.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
