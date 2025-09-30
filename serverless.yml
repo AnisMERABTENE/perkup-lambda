@@ -1,0 +1,102 @@
+service: perkup-backend
+
+useDotenv: true
+
+plugins:
+  - serverless-appsync-plugin
+  - serverless-offline
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-west-1
+  environment:
+    MONGO_URI: ${env:MONGO_URI}
+    JWT_SECRET: ${env:JWT_SECRET}
+    EMAIL_SOURCE: ${env:EMAIL_SOURCE}
+    SES_REGION: ${env:SES_REGION}
+
+functions:
+  graphql:
+    handler: src/graphqlHandler.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - http:
+          path: graphql
+          method: post
+          cors: true
+      - http:
+          path: graphql
+          method: get
+          cors: true
+
+  # Webhook Stripe pour les abonnements
+  stripeWebhook:
+    handler: src/handlers/subscription/webhookHandler.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - http:
+          path: webhook/stripe
+          method: post
+          cors: false
+
+  # Fonctions Auth individuelles (pour compatibilité)
+  registerClient:
+    handler: src/handlers/auth/registerClientHandler.handler
+  registerVendor:
+    handler: src/handlers/auth/registerVendorHandler.handler
+  verifyEmail:
+    handler: src/handlers/auth/verifyEmailHandler.handler
+  login:
+    handler: src/handlers/auth/loginHandler.handler
+  
+  # Fonctions Subscription individuelles (pour compatibilité)
+  createSubscription:
+    handler: src/handlers/subscription/createSubscriptionHandler.handler
+  getSubscriptionStatus:
+    handler: src/handlers/subscription/getSubscriptionStatusHandler.handler
+  cancelSubscription:
+    handler: src/handlers/subscription/cancelSubscriptionHandler.handler
+  reactivateSubscription:
+    handler: src/handlers/subscription/reactivateSubscriptionHandler.handler
+
+custom:
+  serverless-offline:
+    httpPort: 4000
+
+  appSync:
+    name: perkup-api
+    authentication:
+      type: API_KEY
+    schema: schema.graphql
+
+    dataSources:
+      registerClient:
+        type: AWS_LAMBDA
+        config:
+          functionName: registerClient
+      registerVendor:
+        type: AWS_LAMBDA
+        config:
+          functionName: registerVendor
+      verifyEmail:
+        type: AWS_LAMBDA
+        config:
+          functionName: verifyEmail
+      login:
+        type: AWS_LAMBDA
+        config:
+          functionName: login
+
+    resolvers:
+      Mutation:
+        registerClient:
+          dataSource: registerClient
+        registerVendor:
+          dataSource: registerVendor
+        verifyEmail:
+          dataSource: verifyEmail
+        login:
+          dataSource: login
