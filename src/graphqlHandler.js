@@ -19,6 +19,10 @@ import { handler as getSubscriptionStatusHandler } from './handlers/subscription
 import { handler as cancelSubscriptionHandler } from './handlers/subscription/cancelSubscriptionHandler.js';
 import { handler as reactivateSubscriptionHandler } from './handlers/subscription/reactivateSubscriptionHandler.js';
 
+// Import des handlers vendeur
+import { createStoreHandler, updateStoreHandler, getVendorProfileHandler, getVendorStoresHandler } from './handlers/vendor/storeHandler.js';
+import { searchPartnersHandler, getPartnersHandler, getPartnerHandler, getCategoriesHandler, getCitiesHandler, getCityCoordinatesHandler } from './handlers/vendor/partnerHandler.js';
+
 // Import middleware subscription production
 import { withSubscription, withAuth, SUBSCRIPTION_PLANS } from './middlewares/checkSubscription.js';
 
@@ -42,6 +46,18 @@ const typeDefs = `
     # Cache health check
     cacheHealth: CacheHealth!
     
+    # Partner/Store queries
+    searchPartners(lat: Float, lng: Float, radius: Float, category: String, city: String, name: String, limit: Int): PartnerSearchResponse!
+    getPartners(category: String): PartnerListResponse!
+    getPartner(id: ID!): PartnerDetail!
+    getCategories: CategoryResponse!
+    getCities: CitiesResponse!
+    getCityCoordinates: CityCoordinatesResponse!
+    
+    # Vendor queries
+    getVendorProfile: VendorProfile!
+    getVendorStores: VendorStoresResponse!
+    
     # Access to all content (with discount capping)
     premiumContent: PremiumContent
     vipZone: VipContent
@@ -59,6 +75,10 @@ const typeDefs = `
     createSubscription(input: CreateSubscriptionInput!): CreateSubscriptionResponse!
     cancelSubscription: MessageResponse!
     reactivateSubscription: MessageResponse!
+    
+    # Vendor/Store mutations
+    createStore(input: CreateStoreInput!): CreateStoreResponse!
+    updateStore(input: UpdateStoreInput!): UpdateStoreResponse!
   }
 
   # Auth Types
@@ -168,6 +188,196 @@ const typeDefs = `
     connected: Boolean!
     error: String
   }
+  
+  # Vendor/Partner Types
+  input CreateStoreInput {
+    name: String!
+    category: String!
+    address: String!
+    phone: String!
+    discount: Int!
+    description: String
+    logo: String
+    location: LocationInput
+  }
+  
+  input UpdateStoreInput {
+    name: String!
+    category: String!
+    address: String!
+    phone: String!
+    discount: Int!
+    description: String
+    logo: String
+    location: LocationInput
+  }
+  
+  input LocationInput {
+    coordinates: [Float!]!
+  }
+  
+  type Location {
+    latitude: Float!
+    longitude: Float!
+  }
+  
+  type Partner {
+    id: ID!
+    name: String!
+    category: String!
+    address: String!
+    city: String!
+    zipCode: String!
+    phone: String!
+    discount: Int!
+    description: String
+    logo: String
+    location: Location
+    distance: Float
+    offeredDiscount: Int!
+    userDiscount: Int!
+    isPremiumOnly: Boolean!
+    canAccessFullDiscount: Boolean!
+    needsSubscription: Boolean!
+    website: String
+    isActive: Boolean!
+    createdAt: String!
+  }
+  
+  type PartnerDetail {
+    id: ID!
+    name: String!
+    category: String!
+    address: String!
+    city: String!
+    zipCode: String!
+    phone: String!
+    discount: Int!
+    description: String
+    logo: String
+    location: Location
+    offeredDiscount: Int!
+    userDiscount: Int!
+    isPremiumOnly: Boolean!
+    userPlan: String!
+    canAccessFullDiscount: Boolean!
+    needsSubscription: Boolean!
+    website: String
+    createdAt: String!
+    updatedAt: String!
+  }
+  
+  type PartnerSearchResponse {
+    partners: [Partner!]!
+    userPlan: String!
+    searchParams: SearchParams!
+    totalFound: Int!
+    isGeoSearch: Boolean!
+  }
+  
+  type PartnerListResponse {
+    partners: [Partner!]!
+    userPlan: String!
+    totalPartners: Int!
+    availableCategories: [String!]!
+  }
+  
+  type SearchParams {
+    location: SearchLocation
+    radius: Float!
+    category: String
+    city: String
+    name: String
+  }
+  
+  type SearchLocation {
+    lat: Float!
+    lng: Float!
+  }
+  
+  type Category {
+    value: String!
+    label: String!
+  }
+  
+  type CategoryResponse {
+    categories: [Category!]!
+    total: Int!
+  }
+  
+  type CitiesResponse {
+    cities: [String!]!
+    total: Int!
+  }
+  
+  type CityCoordinates {
+    latitude: Float!
+    longitude: Float!
+    partnerCount: Int!
+  }
+  
+  type CityCoordinatesResponse {
+    cityCoordinates: String!
+    totalCities: Int!
+    cities: [String!]!
+  }
+  
+  type Store {
+    id: ID!
+    name: String!
+    category: String!
+    address: String!
+    city: String!
+    zipCode: String!
+    phone: String!
+    discount: Int!
+    description: String
+    logo: String
+    location: Location
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String
+  }
+  
+  type VendorProfile {
+    user: VendorUser!
+    stores: [Store!]!
+    hasStores: Boolean!
+    totalStores: Int!
+    isSetupComplete: Boolean!
+  }
+  
+  type VendorUser {
+    id: ID!
+    firstname: String!
+    lastname: String!
+    email: String!
+    role: String!
+    isVerified: Boolean!
+    createdAt: String!
+  }
+  
+  type VendorStoresResponse {
+    stores: [Store!]!
+    total: Int!
+    vendor: VendorInfo!
+  }
+  
+  type VendorInfo {
+    id: ID!
+    name: String!
+    email: String!
+  }
+  
+  type CreateStoreResponse {
+    message: String!
+    store: Store!
+  }
+  
+  type UpdateStoreResponse {
+    message: String!
+    store: Store!
+  }
 `;
 
 // Résolveurs GraphQL avec middleware production
@@ -240,6 +450,57 @@ const resolvers = {
       };
     }),
     
+    // Partner/Store queries
+    searchPartners: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      return await searchPartnersHandler(event);
+    }),
+    
+    getPartners: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      return await getPartnersHandler(event);
+    }),
+    
+    getPartner: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      return await getPartnerHandler(event);
+    }),
+    
+    getCategories: withAuth(async () => {
+      return await getCategoriesHandler();
+    }),
+    
+    getCities: withAuth(async () => {
+      return await getCitiesHandler();
+    }),
+    
+    getCityCoordinates: withAuth(async () => {
+      return await getCityCoordinatesHandler();
+    }),
+    
+    // Vendor queries (role vendor requis)
+    getVendorProfile: withAuth(async (_, __, context) => {
+      const event = { context };
+      
+      // Vérifier le rôle vendeur
+      if (context.user.role !== 'vendor') {
+        throw new Error('Accès réservé aux vendeurs');
+      }
+      
+      return await getVendorProfileHandler(event);
+    }),
+    
+    getVendorStores: withAuth(async (_, __, context) => {
+      const event = { context };
+      
+      // Vérifier le rôle vendeur
+      if (context.user.role !== 'vendor') {
+        throw new Error('Accès réservé aux vendeurs');
+      }
+      
+      return await getVendorStoresHandler(event);
+    }),
+    
     // Zone VIP - nécessite abonnement premium uniquement
     vipZone: withSubscription(SUBSCRIPTION_PLANS.PREMIUM)(async (_, __, context) => {
       return {
@@ -296,6 +557,29 @@ const resolvers = {
     reactivateSubscription: withAuth(async (_, __, context) => {
       const event = { context };
       return await reactivateSubscriptionHandler(event);
+    }),
+    
+    // Vendor/Store mutations (role vendor requis)
+    createStore: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      
+      // Vérifier le rôle vendeur
+      if (context.user.role !== 'vendor') {
+        throw new Error('Seuls les vendeurs peuvent créer des boutiques');
+      }
+      
+      return await createStoreHandler(event);
+    }),
+    
+    updateStore: withAuth(async (_, args, context) => {
+      const event = { args, context };
+      
+      // Vérifier le rôle vendeur
+      if (context.user.role !== 'vendor') {
+        throw new Error('Seuls les vendeurs peuvent modifier des boutiques');
+      }
+      
+      return await updateStoreHandler(event);
     })
   }
 };
