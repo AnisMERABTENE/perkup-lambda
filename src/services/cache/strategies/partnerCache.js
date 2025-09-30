@@ -1,5 +1,6 @@
 import cacheService from '../cacheService.js';
 import Partner from '../../../models/Partner.js';
+import GeocodingService from '../../geocodingService.js';
 
 // Cache des données partenaires
 export class PartnerCache {
@@ -120,26 +121,23 @@ export class PartnerCache {
         let searchLng = lng;
         let searchRadius = radius || 10;
         
-        // Si on a une ville mais pas de coordonnées, géocoder la ville
+        // Si on a une ville mais pas de coordonnées, géocoder la ville avec précision
         if (city && !lat && !lng) {
-          console.log('Géocodage de la ville:', city);
+          console.log('Géocodage précis de la ville:', city);
           try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1`
-            );
-            const geoData = await response.json();
+            const geoResult = await GeocodingService.geocodeAddress(city);
             
-            if (geoData && geoData.length > 0) {
-              searchLat = parseFloat(geoData[0].lat);
-              searchLng = parseFloat(geoData[0].lon);
+            if (geoResult) {
+              searchLat = geoResult.latitude;
+              searchLng = geoResult.longitude;
               useGeoSearch = true;
-              console.log(`Ville géocodée: ${city} -> ${searchLat}, ${searchLng}`);
+              console.log(`Ville géocodée avec précision: ${city} -> ${searchLat}, ${searchLng}`);
             } else {
               console.log('Impossible de géocoder la ville, recherche par nom de ville');
               query.city = new RegExp(city, 'i');
             }
           } catch (error) {
-            console.error('Erreur géocodage:', error.message);
+            console.error('Erreur géocodage précis:', error.message);
             query.city = new RegExp(city, 'i');
           }
         } else if (lat && lng) {

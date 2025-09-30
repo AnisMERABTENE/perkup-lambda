@@ -2,44 +2,7 @@ import Partner from '../../models/Partner.js';
 import User from '../../models/User.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
-import axios from 'axios';
-
-// Service de géocodage
-class GeocodingService {
-  static async geocodeAddress(address) {
-    try {
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
-      );
-      
-      if (response.data && response.data.length > 0) {
-        const result = response.data[0];
-        return {
-          latitude: parseFloat(result.lat),
-          longitude: parseFloat(result.lon)
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Erreur géocodage:', error.message);
-      return null;
-    }
-  }
-  
-  static extractCityAndZipCode(address) {
-    // Extraction basique ville/code postal
-    const parts = address.split(',').map(p => p.trim());
-    const lastPart = parts[parts.length - 1];
-    
-    const zipMatch = lastPart.match(/\d{5}/);
-    const zipCode = zipMatch ? zipMatch[0] : '';
-    
-    const city = parts.length > 1 ? parts[parts.length - 2] : parts[0];
-    
-    return { city, zipCode };
-  }
-}
+import GeocodingService from '../../services/geocodingService.js';
 
 // Créer une boutique
 export const createStoreHandler = async (event) => {
@@ -72,14 +35,16 @@ export const createStoreHandler = async (event) => {
     
     console.log(`Création boutique: ${name}`);
     
-    // Gestion des coordonnées
+    // PRIORITÉ AUX COORDONNÉES DU FRONTEND (plus précises)
     let coordinates = null;
     
     if (location && location.coordinates && location.coordinates.length === 2) {
       coordinates = location.coordinates;
-      console.log(`Coordonnées précises reçues: ${coordinates[1]}, ${coordinates[0]}`);
+      console.log(`Coordonnées précises reçues du frontend: ${coordinates[1]}, ${coordinates[0]}`);
     } else {
-      console.log('Géocodage automatique...');
+      console.log('Aucune coordonnée fournie par le frontend, géocodage backend précis...');
+      
+      // Utiliser le nouveau service de géocodage précis
       const geoResult = await GeocodingService.geocodeAddress(address);
       
       if (geoResult) {
@@ -89,11 +54,14 @@ export const createStoreHandler = async (event) => {
     }
     
     if (!coordinates) {
-      throw new Error('Impossible de localiser cette adresse');
+      throw new Error('Impossible de localiser cette adresse. Vérifiez l\'adresse saisie.');
     }
     
-    // Extraire ville et code postal
+    // Extraire ville et code postal avec le nouveau service
     const { city, zipCode } = GeocodingService.extractCityAndZipCode(address);
+    
+    // Créer l'objet GeoJSON pour MongoDB
+    const geoLocation = GeocodingService.createGeoJSONLocation(coordinates[1], coordinates[0]);
     
     // Créer la boutique
     const storeData = {
@@ -107,16 +75,13 @@ export const createStoreHandler = async (event) => {
       description: description || '',
       logo: logo || null,
       owner: userId,
-      location: {
-        type: "Point",
-        coordinates: coordinates
-      }
+      location: geoLocation
     };
     
     const store = new Partner(storeData);
     await store.save();
     
-    console.log(`Boutique créée: ${name} par ${user.email}`);
+    console.log(`Boutique créée avec coordonnées précises: ${name} - ${coordinates[1]}, ${coordinates[0]}`);
     
     // Invalider les caches
     await PartnerCache.invalidatePartner(store._id, userId);
@@ -173,17 +138,23 @@ export const updateStoreHandler = async (event) => {
     
     console.log(`Modification boutique: ${name}`);
     
-    // Gestion des coordonnées
+    // PRIORITÉ AUX COORDONNÉES DU FRONTEND (position manuelle)
     let coordinates = null;
     
     if (location && location.coordinates && location.coordinates.length === 2) {
       coordinates = location.coordinates;
     } else if (existingStore.location?.coordinates) {
+      // Garder les anciennes coordonnées si pas de nouvelles
       coordinates = existingStore.location.coordinates;
+      console.log(`Conservation des anciennes coordonnées: ${coordinates[1]}, ${coordinates[0]}`);
     } else {
+      // Géocodage avec le nouveau service si aucune coordonnée disponible
+      console.log('Aucune coordonnée, tentative géocodage précis...');
       const geoResult = await GeocodingService.geocodeAddress(address);
+      
       if (geoResult) {
         coordinates = [geoResult.longitude, geoResult.latitude];
+        console.log(`Géocodage backend: ${geoResult.latitude}, ${geoResult.longitude}`);
       }
     }
     
@@ -191,6 +162,7 @@ export const updateStoreHandler = async (event) => {
       throw new Error('Impossible de localiser cette adresse');
     }
     
+    // Extraire ville et code postal
     const { city, zipCode } = GeocodingService.extractCityAndZipCode(address);
     
     // Préparer les données de mise à jour
@@ -204,10 +176,7 @@ export const updateStoreHandler = async (event) => {
       discount,
       description: description || '',
       logo: logo || existingStore.logo,
-      location: {
-        type: "Point",
-        coordinates: coordinates
-      },
+      location: GeocodingService.createGeoJSONLocation(coordinates[1], coordinates[0]),
       updatedAt: new Date()
     };
     
