@@ -1,0 +1,45 @@
+{
+  "name": "perkup-lambda",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Perkup serverless backend with GraphQL and AWS Lambda",
+  "main": "src/graphql.js",
+  "scripts": {
+    "dev": "serverless offline",
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f graphql",
+    "test": "jest"
+  },
+  "keywords": [
+    "serverless",
+    "aws",
+    "lambda",
+    "graphql",
+    "mongodb",
+    "perkup"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "apollo-server-lambda": "^3.13.0",
+    "aws-sdk": "^2.1498.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "graphql": "^16.11.0",
+    "ioredis": "^5.8.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.3",
+    "redis": "^4.7.1",
+    "stripe": "^14.25.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.8",
+    "jest": "^29.7.0",
+    "serverless": "^3.38.0",
+    "serverless-appsync-plugin": "^2.10.0",
+    "serverless-offline": "^13.3.0"
+  }
+}
