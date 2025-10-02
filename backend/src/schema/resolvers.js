@@ -1,77 +1,50 @@
-const { GraphQLJSON } = require('graphql-type-json');
-const { DateResolver } = require('graphql-scalars');
+// Import de tous les résolveurs modulaires
+import baseResolvers from './base/resolvers.js';
+import authResolvers from './auth/resolvers.js';
+import subscriptionResolvers from './subscription/resolvers.js';
+import partnerResolvers from './partner/resolvers.js';
+import vendorResolvers from './vendor/resolvers.js';
+import digitalCardResolvers from './digitalCard/resolvers.js';
+import couponResolvers from './coupon/resolvers.js';
 
-// Import des résolveurs de modules
-const authResolvers = require('./auth/resolvers');
-const partnerResolvers = require('./partner/resolvers');
-const couponResolvers = require('./coupon/resolvers');
-const digitalCardResolvers = require('./digitalCard/resolvers');
-const vendorResolvers = require('./vendor/resolvers');
-const subscriptionResolvers = require('./subscription/resolvers');
-
-// 🎯 Résolveurs root
-const rootResolvers = {
-  // 📅 Scalars personnalisés
-  Date: DateResolver,
-  JSON: GraphQLJSON,
-
-  // 🔍 Queries principales
-  Query: {
-    health: () => {
-      return `🟢 Perkup GraphQL API is running! ${new Date().toISOString()}`;
-    },
+// Fonction utilitaire pour fusionner les résolveurs
+const mergeResolvers = (resolversArray) => {
+  return resolversArray.reduce((merged, resolvers) => {
+    // Fusionner les Query
+    if (resolvers.Query) {
+      merged.Query = { ...merged.Query, ...resolvers.Query };
+    }
     
-    getJob: async (_, { jobId }, { user }) => {
-      // TODO: Implémenter la récupération du statut de job
-      return {
-        jobId,
-        status: 'PENDING',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    },
+    // Fusionner les Mutation
+    if (resolvers.Mutation) {
+      merged.Mutation = { ...merged.Mutation, ...resolvers.Mutation };
+    }
     
-    // Fusion des queries des modules
-    ...authResolvers.Query,
-    ...partnerResolvers.Query,
-    ...couponResolvers.Query,
-    ...digitalCardResolvers.Query,
-    ...vendorResolvers.Query,
-    ...subscriptionResolvers.Query,
-  },
-
-  // 🚀 Mutations principales
-  Mutation: {
-    ping: () => {
-      return `🏓 Pong! Server time: ${new Date().toISOString()}`;
-    },
+    // Fusionner les Subscription
+    if (resolvers.Subscription) {
+      merged.Subscription = { ...merged.Subscription, ...resolvers.Subscription };
+    }
     
-    // Fusion des mutations des modules
-    ...authResolvers.Mutation,
-    ...partnerResolvers.Mutation,
-    ...couponResolvers.Mutation,
-    ...digitalCardResolvers.Mutation,
-    ...vendorResolvers.Mutation,
-    ...subscriptionResolvers.Mutation,
-  },
-
-  // 🔔 Subscriptions principales
-  Subscription: {
-    jobStatusChanged: {
-      // TODO: Implémenter with PubSub ou AppSync
-      subscribe: () => {
-        // Mock pour l'instant
-      },
-    },
+    // Fusionner d'autres types personnalisés
+    Object.keys(resolvers).forEach(key => {
+      if (key !== 'Query' && key !== 'Mutation' && key !== 'Subscription') {
+        merged[key] = { ...merged[key], ...resolvers[key] };
+      }
+    });
     
-    // Fusion des subscriptions des modules
-    ...authResolvers.Subscription,
-    ...partnerResolvers.Subscription,
-    ...couponResolvers.Subscription,
-    ...digitalCardResolvers.Subscription,
-    ...vendorResolvers.Subscription,
-    ...subscriptionResolvers.Subscription,
-  },
+    return merged;
+  }, { Query: {}, Mutation: {}, Subscription: {} });
 };
 
-module.exports = rootResolvers;
+// Fusion de tous les résolveurs
+const resolvers = mergeResolvers([
+  baseResolvers,
+  authResolvers,
+  subscriptionResolvers,
+  partnerResolvers,
+  vendorResolvers,
+  digitalCardResolvers,
+  couponResolvers
+]);
+
+export default resolvers;
