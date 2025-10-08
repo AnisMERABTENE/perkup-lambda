@@ -1,26 +1,97 @@
-service: perkup-backend
+service: perkup-backend-scalable
 
 useDotenv: true
 
 plugins:
   - serverless-appsync-plugin
   - serverless-offline
+  - serverless-plugin-warmup
 
 provider:
   name: aws
   runtime: nodejs18.x
   region: eu-west-1
+  
+  # 🔥 OPTIMISATIONS CRITIQUES POUR 50K USERS
   environment:
     MONGO_URI: ${env:MONGO_URI}
     JWT_SECRET: ${env:JWT_SECRET}
     EMAIL_SOURCE: ${env:EMAIL_SOURCE}
     SES_REGION: ${env:SES_REGION}
+    
+    # Cache distribué Phase 3
+    REDIS_CLUSTER_ENDPOINT: ${env:REDIS_CLUSTER_ENDPOINT}
+    CACHE_ENABLED: true
+    ENABLE_DYNAMODB_CACHE: true
+    DYNAMODB_CACHE_TABLE: perkup-user-cache
+    
+    # Performance Phase 2 & 3
+    NODE_ENV: ${env:NODE_ENV, 'development'}  # Utilise .env ou default à development
+    CONNECTION_POOL_SIZE: 100
+    CACHE_STRATEGY: multi_layer
+    MONITORING_ENABLED: true
+    
+    # Rate limiting Phase 1
+    RATE_LIMIT_GLOBAL: 50000
+    RATE_LIMIT_PER_USER: 1000
+    
+  # 🚀 IAM optimisé pour haute performance
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchGetItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:Scan
+      Resource: 
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/perkup-*"
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/perkup-*/index/*"
+    - Effect: Allow
+      Action:
+        - sqs:SendMessage
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+        - sqs:GetQueueAttributes
+      Resource: 
+        - "arn:aws:sqs:${self:provider.region}:*:perkup-*"
+    - Effect: Allow
+      Action:
+        - sns:Publish
+        - sns:Subscribe
+        - sns:Unsubscribe
+      Resource: 
+        - "arn:aws:sns:${self:provider.region}:*:perkup-*"
+    - Effect: Allow
+      Action:
+        - execute-api:ManageConnections
+      Resource:
+        - "arn:aws:execute-api:${self:provider.region}:*:*/*/*/*"
+    - Effect: Allow
+      Action:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+      Resource: "*"
 
 functions:
+  # 🔥 FONCTION GRAPHQL HAUTE PERFORMANCE (Phase 1 complète)
   graphql:
-    handler: src/graphqlHandler.handler
-    timeout: 30
-    memorySize: 512
+    handler: src/graphqlHandler.handler  # Garde le handler existant optimisé Phase 2
+    timeout: 900  # 15 minutes
+    memorySize: 3008  # Maximum pour performance
+    # 🚀 PROVISIONED CONCURRENCY pour éliminer cold starts
+    provisionedConcurrency: 50  # Phase 1 complète
+    reservedConcurrency: 500  # Phase 1 complète
+    warmup:
+      enabled: true
+      prewarm: true
+    environment:
+      CONNECTION_POOL_SIZE: 100  # Phase 2
+      CACHE_STRATEGY: multi_layer  # Phase 3
     events:
       - http:
           path: graphql
@@ -30,73 +101,261 @@ functions:
           path: graphql
           method: get
           cors: true
+      - http:
+          path: health
+          method: get
+          cors: true
 
-  # Webhook Stripe pour les abonnements
-  stripeWebhook:
-    handler: src/handlers/subscription/webhookHandler.handler
+  # 🚀 FONCTIONS ASYNC POUR TRAITEMENT LOURD (Phase 1)
+  asyncProcessor:
+    handler: src/handlers/async/processorHandler.handler
+    timeout: 900
+    memorySize: 1024
+    environment:
+      CONNECTION_POOL_SIZE: 50
+    events:
+      - sqs:
+          arn: !GetAtt AsyncQueue.Arn
+          batchSize: 10
+          maximumBatchingWindowInSeconds: 5
+
+  # 🔥 WEBSOCKET POUR TEMPS RÉEL (Phase 1)
+  websocketConnect:
+    handler: src/handlers/websocket/connectHandler.handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - websocket:
+          route: $connect
+  
+  websocketDisconnect:
+    handler: src/handlers/websocket/disconnectHandler.handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - websocket:
+          route: $disconnect
+          
+  websocketMessage:
+    handler: src/handlers/websocket/messageHandler.handler
     timeout: 30
     memorySize: 512
+    events:
+      - websocket:
+          route: message
+
+  # 🛡️ RATE LIMITING DISTRIBUÉE (Phase 1)
+  rateLimiter:
+    handler: src/handlers/security/rateLimiterHandler.handler
+    timeout: 30
+    memorySize: 256
+    environment:
+      CACHE_ENABLED: true
+
+  # Webhook Stripe pour les abonnements (CONSERVÉ)
+  stripeWebhook:
+    handler: src/handlers/subscription/webhookHandler.handler
+    timeout: 60
+    memorySize: 1024
     events:
       - http:
           path: webhook/stripe
           method: post
           cors: false
 
-  # Fonctions Auth individuelles (pour compatibilité)
-  registerClient:
-    handler: src/handlers/auth/registerClientHandler.handler
-  registerVendor:
-    handler: src/handlers/auth/registerVendorHandler.handler
-  verifyEmail:
-    handler: src/handlers/auth/verifyEmailHandler.handler
-  login:
-    handler: src/handlers/auth/loginHandler.handler
-  
-  # Fonctions Subscription individuelles (pour compatibilité)
-  createSubscription:
-    handler: src/handlers/subscription/createSubscriptionHandler.handler
-  getSubscriptionStatus:
-    handler: src/handlers/subscription/getSubscriptionStatusHandler.handler
-  cancelSubscription:
-    handler: src/handlers/subscription/cancelSubscriptionHandler.handler
-  reactivateSubscription:
-    handler: src/handlers/subscription/reactivateSubscriptionHandler.handler
+# 🔥 RESSOURCES AWS OPTIMISÉES (Phase 1 complète)
+resources:
+  Resources:
+    # 🚀 DynamoDB pour cache haute performance
+    UserCacheTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: perkup-user-cache
+        BillingMode: ON_DEMAND  # Auto-scaling
+        AttributeDefinitions:
+          - AttributeName: cacheKey
+            AttributeType: S
+          - AttributeName: type
+            AttributeType: S
+        KeySchema:
+          - AttributeName: cacheKey
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: TypeIndex
+            KeySchema:
+              - AttributeName: type
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+
+    # 🔥 SQS pour traitement asynchrone
+    AsyncQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: perkup-async-queue
+        VisibilityTimeoutSeconds: 960
+        MessageRetentionPeriod: 1209600  # 14 jours
+        DelaySeconds: 0
+        ReceiveMessageWaitTimeSeconds: 20  # Long polling
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+          maxReceiveCount: 3
+
+    DeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: perkup-dlq
+        MessageRetentionPeriod: 1209600
+
+    # 🚀 SNS pour notifications distribuées
+    NotificationTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: perkup-notifications
+        DisplayName: Perkup Notifications
+
+    # 🔥 CloudWatch Dashboard pour monitoring
+    MonitoringDashboard:
+      Type: AWS::CloudWatch::Dashboard
+      Properties:
+        DashboardName: perkup-performance
+        DashboardBody: !Sub |
+          {
+            "widgets": [
+              {
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    ["AWS/Lambda", "Duration", "FunctionName", "${AWS::StackName}-graphql"],
+                    ["AWS/Lambda", "Errors", "FunctionName", "${AWS::StackName}-graphql"],
+                    ["AWS/Lambda", "Invocations", "FunctionName", "${AWS::StackName}-graphql"]
+                  ],
+                  "period": 300,
+                  "stat": "Average",
+                  "region": "${AWS::Region}",
+                  "title": "GraphQL Performance"
+                }
+              }
+            ]
+          }
+
+    # 🚀 CloudWatch Alarms
+    GraphQLErrorsAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: perkup-graphql-errors
+        AlarmDescription: GraphQL function errors
+        MetricName: Errors
+        Namespace: AWS/Lambda
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 10
+        ComparisonOperator: GreaterThanThreshold
+        Dimensions:
+          - Name: FunctionName
+            Value: !Ref GraphqlLambdaFunction
+        AlarmActions:
+          - !Ref NotificationTopic
+
+    GraphQLDurationAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: perkup-graphql-duration
+        AlarmDescription: GraphQL function duration
+        MetricName: Duration
+        Namespace: AWS/Lambda
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 10000
+        ComparisonOperator: GreaterThanThreshold
+        Dimensions:
+          - Name: FunctionName
+            Value: !Ref GraphqlLambdaFunction
+        AlarmActions:
+          - !Ref NotificationTopic
 
 custom:
+  # 🔥 WARMUP CONFIGURATION (Phase 1 complète)
+  warmup:
+    default:
+      enabled: true
+      events:
+        - schedule: rate(5 minutes)
+      timeout: 20
+      prewarm: true
+      concurrency: 10
+      
+  # Configuration offline pour dev
   serverless-offline:
     httpPort: 4000
-
+    
+  # 🚀 APPSYNC HAUTE PERFORMANCE (Phase 1)
   appSync:
-    name: perkup-api
+    name: perkup-api-scalable
     authentication:
-      type: API_KEY
+      type: API_KEY  # Simplifié pour commencer, Cognito plus tard
     schema: schema.graphql
-
+    
+    # 🔥 CACHE GLOBAL ACTIVÉ
+    caching:
+      type: SMALL  # Ou MEDIUM/LARGE selon besoins
+      ttl: 300     # 5 minutes
+      
+    # 🚀 LOGGING COMPLET
+    logging:
+      level: ALL
+      
     dataSources:
-      registerClient:
+      # MongoDB via Lambda optimisée (Phase 2 + 3)
+      mongoLambda:
         type: AWS_LAMBDA
         config:
-          functionName: registerClient
-      registerVendor:
-        type: AWS_LAMBDA
+          functionName: graphql
+      
+      # DynamoDB direct pour cache (Phase 3)
+      userCache:
+        type: AMAZON_DYNAMODB
         config:
-          functionName: registerVendor
-      verifyEmail:
-        type: AWS_LAMBDA
-        config:
-          functionName: verifyEmail
-      login:
-        type: AWS_LAMBDA
-        config:
-          functionName: login
+          tableName: !Ref UserCacheTable
 
     resolvers:
+      Query:
+        getUser:
+          dataSource: userCache
+          caching:
+            keys:
+              - $context.arguments.id
+            ttl: 300
+            
       Mutation:
-        registerClient:
-          dataSource: registerClient
-        registerVendor:
-          dataSource: registerVendor
-        verifyEmail:
-          dataSource: verifyEmail
-        login:
-          dataSource: login
+        createUser:
+          dataSource: mongoLambda
+          caching:
+            keys:
+              - $context.arguments.input.email
+            ttl: 60
+
+# Outputs pour référence (seulement en production)
+# outputs:
+#   GraphQLEndpoint:
+#     Description: GraphQL API endpoint
+#     Value: !Sub "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}/graphql"
+#     
+#   WebSocketEndpoint:
+#     Description: WebSocket API endpoint  
+#     Value: !Sub "wss://${WebsocketsApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}"
+#     
+#   DynamoDBCacheTable:
+#     Description: DynamoDB cache table
+#     Value: !Ref UserCacheTable
+#     
+#   AsyncQueue:
+#     Description: SQS queue for async processing
+#     Value: !Ref AsyncQueue

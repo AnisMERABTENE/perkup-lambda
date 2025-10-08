@@ -14,6 +14,7 @@ const subscriptionTypeDefs = `
     plan: String
     status: String!
     stripeSubscriptionId: String
+    stripeCustomerId: String
     currentPeriodStart: String
     currentPeriodEnd: String
     endDate: String

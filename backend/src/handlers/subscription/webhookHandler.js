@@ -10,11 +10,24 @@ dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const handler = async (event) => {
+  console.log('🚀 WEBHOOK STRIPE - DÉBUT');
+  console.log('📋 Event reçu:', {
+    headers: event.headers,
+    method: event.httpMethod,
+    hasBody: !!event.body,
+    bodyType: typeof event.body
+  });
+  
   try {
     await connectDB();
     
     const sig = event.headers['stripe-signature'];
     const body = event.body;
+    
+    console.log('🔍 DEBUGGING:');
+    console.log('- sig:', sig);
+    console.log('- NODE_ENV:', process.env.NODE_ENV);
+    console.log('- Condition (!sig && NODE_ENV === dev):', !sig && process.env.NODE_ENV === 'development');
     
     let stripeEvent;
     
@@ -86,14 +99,16 @@ async function handleInvoicePaymentSucceeded(invoice) {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     const plan = getPlanFromSubscription(subscription);
     
-    console.log(`Activation abonnement - Customer: ${customerId}, Plan: ${plan}`);
+    console.log(`Activation abonnement - Subscription: ${subscriptionId}, Plan: ${plan}`);
 
+    // CORRECTIF : Chercher par subscriptionId au lieu de customerId
     const updateResult = await User.findOneAndUpdate(
-      { 'subscription.stripeCustomerId': customerId },
+      { 'subscription.stripeSubscriptionId': subscriptionId },
       {
         $set: {
           'subscription.status': 'active',
           'subscription.plan': plan,
+          'subscription.stripeCustomerId': customerId, // Sauvegarder aussi le customerId
           'subscription.currentPeriodStart': new Date(subscription.current_period_start * 1000),
           'subscription.currentPeriodEnd': new Date(subscription.current_period_end * 1000)
         }
@@ -104,7 +119,7 @@ async function handleInvoicePaymentSucceeded(invoice) {
     if (updateResult) {
       console.log(`Abonnement activé avec succès - User: ${updateResult.email}, Plan: ${plan}`);
     } else {
-      console.error(`Utilisateur introuvable avec customerId: ${customerId}`);
+      console.error(`Utilisateur introuvable avec subscriptionId: ${subscriptionId}`);
     }
   } catch (error) {
     console.error('Erreur lors du traitement invoice.payment_succeeded:', error);

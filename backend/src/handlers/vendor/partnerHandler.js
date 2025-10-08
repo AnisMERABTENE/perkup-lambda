@@ -149,6 +149,7 @@ export const getPartnersHandler = async (event) => {
         offeredDiscount: partner.discount,
         userDiscount: finalDiscount,
         isPremiumOnly: partner.discount > 15,
+        canAccessFullDiscount: userPlan === "premium" || partner.discount <= (userPlan === "super" ? 10 : userPlan === "basic" ? 5 : 0),
         needsSubscription: userPlan === "free" && partner.discount > 0,
         isActive: partner.isActive,
         createdAt: partner.createdAt

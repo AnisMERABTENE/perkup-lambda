@@ -42,8 +42,9 @@ export const handler = async (event) => {
     // Créer ou récupérer le customer Stripe
     let customerId = user.subscription?.stripeCustomerId;
     
+    // FORCAGE : Si customerId est null ou undefined, créer un nouveau customer
     if (!customerId) {
-      console.log('Création d\'un nouveau customer Stripe');
+      console.log('Création d\'un nouveau customer Stripe (customerId était:', customerId, ')');
       const customer = await stripe.customers.create({
         email: user.email,
         name: `${user.firstname} ${user.lastname}`,
@@ -51,10 +52,13 @@ export const handler = async (event) => {
       });
       customerId = customer.id;
 
-      // Mettre à jour l'utilisateur avec le customer ID
+      // Mettre à jour l'utilisateur avec le customer ID IMMÉDIATEMENT
       await User.findByIdAndUpdate(user._id, {
         $set: { 'subscription.stripeCustomerId': customerId }
       });
+      console.log('Customer ID sauvegardé:', customerId);
+    } else {
+      console.log('Customer ID existant trouvé:', customerId);
     }
 
     // Vérifier si l'utilisateur a déjà un abonnement actif
@@ -163,6 +167,7 @@ export const handler = async (event) => {
 
     // Sauvegarder les informations d'abonnement en base
     const updateData = {
+      'subscription.stripeCustomerId': customerId,  // AJOUT: toujours sauvegarder le customerId
       'subscription.stripeSubscriptionId': subscription.id,
       'subscription.plan': plan,
       'subscription.status': subscription.status
