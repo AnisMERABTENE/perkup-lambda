@@ -1,9 +1,8 @@
-service: perkup-backend-scalable
+service: perkup-backend-v2
 
 useDotenv: true
 
 plugins:
-  - serverless-appsync-plugin
   - serverless-offline
   - serverless-plugin-warmup
 
@@ -81,14 +80,11 @@ functions:
   # 🔥 FONCTION GRAPHQL HAUTE PERFORMANCE (Phase 1 complète)
   graphql:
     handler: src/graphqlHandler.handler  # Garde le handler existant optimisé Phase 2
-    timeout: 900  # 15 minutes
-    memorySize: 3008  # Maximum pour performance
-    # 🚀 PROVISIONED CONCURRENCY pour éliminer cold starts
-    provisionedConcurrency: 50  # Phase 1 complète
-    reservedConcurrency: 500  # Phase 1 complète
+    timeout: 30
+    memorySize: 1024  # Réduit pour éviter les coûts
     warmup:
-      enabled: true
-      prewarm: true
+      default:
+        enabled: true
     environment:
       CONNECTION_POOL_SIZE: 100  # Phase 2
       CACHE_STRATEGY: multi_layer  # Phase 3
@@ -101,23 +97,6 @@ functions:
           path: graphql
           method: get
           cors: true
-      - http:
-          path: health
-          method: get
-          cors: true
-
-  # 🚀 FONCTIONS ASYNC POUR TRAITEMENT LOURD (Phase 1)
-  asyncProcessor:
-    handler: src/handlers/async/processorHandler.handler
-    timeout: 900
-    memorySize: 1024
-    environment:
-      CONNECTION_POOL_SIZE: 50
-    events:
-      - sqs:
-          arn: !GetAtt AsyncQueue.Arn
-          batchSize: 10
-          maximumBatchingWindowInSeconds: 5
 
   # 🔥 WEBSOCKET POUR TEMPS RÉEL (Phase 1)
   websocketConnect:
@@ -155,7 +134,7 @@ functions:
   # Webhook Stripe pour les abonnements (CONSERVÉ)
   stripeWebhook:
     handler: src/handlers/subscription/webhookHandler.handler
-    timeout: 60
+    timeout: 30
     memorySize: 1024
     events:
       - http:
@@ -171,7 +150,7 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: perkup-user-cache
-        BillingMode: ON_DEMAND  # Auto-scaling
+        BillingMode: PAY_PER_REQUEST  # Corrigé: PAY_PER_REQUEST au lieu de ON_DEMAND
         AttributeDefinitions:
           - AttributeName: cacheKey
             AttributeType: S
@@ -192,25 +171,6 @@ resources:
           Enabled: true
         PointInTimeRecoverySpecification:
           PointInTimeRecoveryEnabled: true
-
-    # 🔥 SQS pour traitement asynchrone
-    AsyncQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: perkup-async-queue
-        VisibilityTimeoutSeconds: 960
-        MessageRetentionPeriod: 1209600  # 14 jours
-        DelaySeconds: 0
-        ReceiveMessageWaitTimeSeconds: 20  # Long polling
-        RedrivePolicy:
-          deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
-          maxReceiveCount: 3
-
-    DeadLetterQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: perkup-dlq
-        MessageRetentionPeriod: 1209600
 
     # 🚀 SNS pour notifications distribuées
     NotificationTopic:
@@ -259,9 +219,10 @@ resources:
         ComparisonOperator: GreaterThanThreshold
         Dimensions:
           - Name: FunctionName
-            Value: !Ref GraphqlLambdaFunction
+            Value:
+              Ref: GraphqlLambdaFunction
         AlarmActions:
-          - !Ref NotificationTopic
+          - Ref: NotificationTopic
 
     GraphQLDurationAlarm:
       Type: AWS::CloudWatch::Alarm
@@ -277,9 +238,14 @@ resources:
         ComparisonOperator: GreaterThanThreshold
         Dimensions:
           - Name: FunctionName
-            Value: !Ref GraphqlLambdaFunction
+            Value:
+              Ref: GraphqlLambdaFunction
         AlarmActions:
-          - !Ref NotificationTopic
+          - Ref: NotificationTopic
+
+
+
+
 
 custom:
   # 🔥 WARMUP CONFIGURATION (Phase 1 complète)
@@ -290,57 +256,13 @@ custom:
         - schedule: rate(5 minutes)
       timeout: 20
       prewarm: true
-      concurrency: 10
+      concurrency: 2  # Réduit pour éviter trop de fonctions
       
   # Configuration offline pour dev
   serverless-offline:
     httpPort: 4000
     
-  # 🚀 APPSYNC HAUTE PERFORMANCE (Phase 1)
-  appSync:
-    name: perkup-api-scalable
-    authentication:
-      type: API_KEY  # Simplifié pour commencer, Cognito plus tard
-    schema: schema.graphql
-    
-    # 🔥 CACHE GLOBAL ACTIVÉ
-    caching:
-      type: SMALL  # Ou MEDIUM/LARGE selon besoins
-      ttl: 300     # 5 minutes
-      
-    # 🚀 LOGGING COMPLET
-    logging:
-      level: ALL
-      
-    dataSources:
-      # MongoDB via Lambda optimisée (Phase 2 + 3)
-      mongoLambda:
-        type: AWS_LAMBDA
-        config:
-          functionName: graphql
-      
-      # DynamoDB direct pour cache (Phase 3)
-      userCache:
-        type: AMAZON_DYNAMODB
-        config:
-          tableName: !Ref UserCacheTable
 
-    resolvers:
-      Query:
-        getUser:
-          dataSource: userCache
-          caching:
-            keys:
-              - $context.arguments.id
-            ttl: 300
-            
-      Mutation:
-        createUser:
-          dataSource: mongoLambda
-          caching:
-            keys:
-              - $context.arguments.input.email
-            ttl: 60
 
 # Outputs pour référence (seulement en production)
 # outputs:

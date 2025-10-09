@@ -1,4 +1,4 @@
-import distributedCache from '../../services/cache/cacheService.js';
+const distributedCache = require('../../services/cache/cacheService.js');
 
 // Stats globales du rate limiter
 let rateLimiterStats = {
@@ -9,7 +9,7 @@ let rateLimiterStats = {
   resetTime: Date.now()
 };
 
-export const handler = async (event, context) => {
+const handler = async (event, context) => {
   const startTime = Date.now();
   
   try {
@@ -339,7 +339,7 @@ async function countRecentIncidents(ip) {
 }
 
 // Fonction pour obtenir les stats du rate limiter
-export const getRateLimiterStats = () => {
+const getRateLimiterStats = () => {
   const uptime = Date.now() - rateLimiterStats.resetTime;
   
   return {
@@ -352,7 +352,7 @@ export const getRateLimiterStats = () => {
 };
 
 // Health check du rate limiter
-export const healthCheck = async () => {
+const healthCheck = async () => {
   try {
     const cacheHealth = await distributedCache.health();
     const stats = getRateLimiterStats();
@@ -373,4 +373,11 @@ export const healthCheck = async () => {
       timestamp: new Date().toISOString()
     };
   }
+};
+
+// Export CommonJS
+module.exports = {
+  handler,
+  getRateLimiterStats,
+  healthCheck
 };

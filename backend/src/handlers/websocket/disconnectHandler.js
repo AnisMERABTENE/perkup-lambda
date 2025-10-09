@@ -1,10 +1,10 @@
-import AWS from 'aws-sdk';
-import distributedCache from '../../services/cache/cacheService.js';
+const AWS = require('aws-sdk');
+const distributedCache = require('../../services/cache/cacheService.js');
 
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE || 'perkup-websocket-connections';
 
-export const handler = async (event, context) => {
+const handler = async (event, context) => {
   const { connectionId } = event;
   
   try {
@@ -202,3 +202,6 @@ async function sendNotificationToConnection(connectionId, message, connectionDat
     }
   }
 }
+
+// Export CommonJS
+module.exports = { handler };

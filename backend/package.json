@@ -9,6 +9,9 @@
     "deploy": "serverless deploy",
     "deploy:dev": "serverless deploy --stage dev",
     "deploy:prod": "serverless deploy --stage prod",
+    "fix-deploy": "./scripts/fix-and-deploy.sh",
+    "fix-deploy:dev": "./scripts/fix-and-deploy.sh dev",
+    "fix-deploy:prod": "./scripts/fix-and-deploy.sh prod",
     "remove": "serverless remove",
     "logs": "serverless logs -f graphql",
     "test": "jest"
@@ -39,7 +42,6 @@
     "@types/jest": "^29.5.8",
     "jest": "^29.7.0",
     "serverless": "^3.38.0",
-    "serverless-appsync-plugin": "^2.10.0",
     "serverless-offline": "^13.3.0",
     "serverless-plugin-warmup": "^8.3.0"
   }

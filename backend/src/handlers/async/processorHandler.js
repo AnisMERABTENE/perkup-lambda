@@ -1,5 +1,5 @@
-import { connectDB } from '../../services/db.js';
-import distributedCache from '../../services/cache/cacheService.js';
+const { connectDB } = require('../../services/db.js');
+const distributedCache = require('../../services/cache/cacheService.js');
 
 // Stats pour monitoring
 let processorStats = {
@@ -8,7 +8,7 @@ let processorStats = {
   averageProcessingTime: 0
 };
 
-export const handler = async (event, context) => {
+const handler = async (event, context) => {
   // Pattern Lambda officiel
   context.callbackWaitsForEmptyEventLoop = false;
   
@@ -235,4 +235,10 @@ async function processCacheWarmup(data, jobId) {
 }
 
 // Export des stats pour monitoring
-export const getProcessorStats = () => processorStats;
+const getProcessorStats = () => processorStats;
+
+// Exports CommonJS
+module.exports = {
+  handler,
+  getProcessorStats
+};

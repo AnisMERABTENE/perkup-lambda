@@ -1,11 +1,11 @@
-import AWS from 'aws-sdk';
-import jwt from 'jsonwebtoken';
-import distributedCache from '../../services/cache/cacheService.js';
+const AWS = require('aws-sdk');
+const jwt = require('jsonwebtoken');
+const distributedCache = require('../../services/cache/cacheService.js');
 
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE || 'perkup-websocket-connections';
 
-export const handler = async (event, context) => {
+const handler = async (event, context) => {
   const { connectionId, requestContext } = event;
   
   try {
@@ -187,3 +187,6 @@ async function cleanupConnection(connectionId) {
     console.error(`❌ Erreur nettoyage connexion ${connectionId}:`, error);
   }
 }
+
+// Export CommonJS
+module.exports = { handler };
