@@ -1,9 +1,9 @@
-const Stripe = require('stripe');
-const User = require('../../models/User.js');
-const { connectDB } = require('../../services/db.js');
-const { SubscriptionCache } = require('../../services/cache/strategies/subscriptionCache.js');
-const { UserCache } = require('../../services/cache/strategies/userCache.js');
-const dotenv = require('dotenv');
+import Stripe from 'stripe';
+import User from '../../models/User.js';
+import { connectDB } from '../../services/db.js';
+import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
+import { UserCache } from '../../services/cache/strategies/userCache.js';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -311,5 +311,5 @@ function getPlanFromSubscription(subscription) {
   return 'unknown';
 }
 
-// Export CommonJS
-module.exports = { handler };
+// Export ES modules
+export { handler };

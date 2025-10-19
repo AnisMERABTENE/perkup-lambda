@@ -168,14 +168,18 @@ class DatabaseOptimizer {
   async initializeOptimizations() {
     try {
       console.log('🚀 Initialisation optimisations MongoDB Phase 2...');
-      
-      await Promise.all([
-        this.createOptimalIndexes(),
-        this.optimizeFrequentQueries(),
-        this.setupQueryProfiling()
-      ]);
-      
-      console.log('✅ Optimisations MongoDB Phase 2 initialisées');
+    
+    // ⚠️ DÉSACTIVÉ - Génère des erreurs de permissions
+    // Les index doivent être créés UNE FOIS via migration, pas à chaque requête
+    /*
+    await Promise.all([
+      this.createOptimalIndexes(),
+      this.optimizeFrequentQueries(),
+      this.setupQueryProfiling()
+    ]);
+    */
+    
+      console.log('✅ Optimisations désactivées (éviter erreurs répétées)');
     } catch (error) {
       console.error('❌ Erreur initialisation optimisations:', error);
     }

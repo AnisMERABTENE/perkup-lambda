@@ -18,6 +18,12 @@ provider:
     EMAIL_SOURCE: ${env:EMAIL_SOURCE}
     SES_REGION: ${env:SES_REGION}
     
+    # Stripe Configuration
+    STRIPE_SECRET_KEY: ${env:STRIPE_SECRET_KEY}
+    STRIPE_PRICE_BASIC: ${env:STRIPE_PRICE_BASIC}
+    STRIPE_PRICE_SUPER: ${env:STRIPE_PRICE_SUPER}
+    STRIPE_PRICE_PREMIUM: ${env:STRIPE_PRICE_PREMIUM}
+    
     # Cache distribué Phase 3
     REDIS_CLUSTER_ENDPOINT: ${env:REDIS_CLUSTER_ENDPOINT}
     CACHE_ENABLED: true
@@ -75,6 +81,11 @@ provider:
         - logs:CreateLogStream
         - logs:PutLogEvents
       Resource: "*"
+    - Effect: Allow
+      Action:
+        - ses:SendEmail
+        - ses:SendRawEmail
+      Resource: "*"
 
 functions:
   # 🔥 FONCTION GRAPHQL HAUTE PERFORMANCE (Phase 1 complète)
@@ -84,7 +95,7 @@ functions:
     memorySize: 1024  # Réduit pour éviter les coûts
     warmup:
       default:
-        enabled: true
+        enabled: false
     environment:
       CONNECTION_POOL_SIZE: 100  # Phase 2
       CACHE_STRATEGY: multi_layer  # Phase 3
@@ -251,7 +262,7 @@ custom:
   # 🔥 WARMUP CONFIGURATION (Phase 1 complète)
   warmup:
     default:
-      enabled: true
+      enabled: false
       events:
         - schedule: rate(5 minutes)
       timeout: 20
