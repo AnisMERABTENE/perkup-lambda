@@ -1,6 +1,7 @@
 import Partner from '../../models/Partner.js';
 import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
+import cacheService from '../../services/cache/cacheService.js';
 
 // Fonction utilitaire pour calculer la distance
 const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -115,17 +116,46 @@ export const getPartnersHandler = async (event) => {
   const userId = event.context.user.id;
   
   try {
-    // Récupérer le plan utilisateur
-    const subscriptionFeatures = await SubscriptionCache.getSubscriptionFeatures(userId);
-    const userPlan = subscriptionFeatures?.isActive ? subscriptionFeatures.plan : 'free';
-    
+    // 🔥 CACHE GLOBAL: Récupérer les données brutes (partagé entre tous) v2
     let partners;
     if (category) {
-      partners = await PartnerCache.getPartnersByCategory(category);
+      const cacheKey = `category:${category}:v2`;
+      partners = await cacheService.getOrSet(
+        cacheKey,
+        'partners',
+        async () => {
+          const partners = await Partner.find({ 
+            category, 
+            isActive: true 
+          }).sort({ name: 1 });
+          return partners.map(p => {
+            const obj = p.toObject();
+            obj._id = obj._id.toString();
+            if (obj.owner) obj.owner = obj.owner.toString();
+            return obj;
+          });
+        }
+      );
     } else {
-      // Pour tous les partenaires, utiliser la recherche avec cache
-      partners = await PartnerCache.searchPartners({ limit: 100 });
+      // Cache global pour tous les partenaires v2
+      partners = await cacheService.getOrSet(
+        'all_partners:v2',
+        'partners', 
+        async () => {
+          const partners = await Partner.find({ isActive: true }).sort({ name: 1 }).limit(100);
+          return partners.map(p => {
+            const obj = p.toObject();
+            obj._id = obj._id.toString();
+            if (obj.owner) obj.owner = obj.owner.toString();
+            return obj;
+          });
+        }
+      );
     }
+    
+    // 👤 CALCUL UTILISATEUR: Après récupération cache (pas caché)
+    const subscriptionFeatures = await SubscriptionCache.getSubscriptionFeatures(userId);
+    const userPlan = subscriptionFeatures?.isActive ? subscriptionFeatures.plan : 'free';
     
     const result = partners.map(partner => {
       const finalDiscount = calculateUserDiscount(partner.discount, userPlan);

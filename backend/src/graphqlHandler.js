@@ -11,6 +11,10 @@ import { connectDB, checkDatabaseHealth } from './services/db.js';
 import typeDefs from './schema/index.js';
 import resolvers from './schema/resolvers.js';
 
+// Import des middlewares de sécurité
+import createSecurityMiddleware from './middlewares/securityMiddleware.js';
+import secureLogger from './utils/secureLogger.js';
+
 dotenv.config();
 
 // Stats de performance globales (Phase 2)
@@ -33,7 +37,7 @@ const getUser = async (event) => {
                       event.headers?.['authorization'];
     
     if (!authHeader) {
-      console.log('🔍 Auth: Pas de header Authorization');
+      secureLogger.debug('🔍 Auth: Pas de header Authorization');
       return null;
     }
     
@@ -44,12 +48,12 @@ const getUser = async (event) => {
     const userData = await User.findById(decoded.id);
     
     if (!userData) {
-      console.log(`⚠️ Auth: Utilisateur ${decoded.id} introuvable`);
+      secureLogger.warn(`⚠️ Auth: Utilisateur ${decoded.id} introuvable`);
       return null;
     }
     
     const authDuration = Date.now() - authStart;
-    console.log(`✅ Auth réussie en ${authDuration}ms pour ${userData.email}`);
+    secureLogger.info(`✅ Auth réussie en ${authDuration}ms pour utilisateur ${userData._id}`);
     
     // Mettre à jour les stats d'auth
     performanceStats.authSuccessRate = 
@@ -63,7 +67,7 @@ const getUser = async (event) => {
     };
   } catch (error) {
     const authDuration = Date.now() - authStart;
-    console.log(`❌ Erreur auth (${authDuration}ms):`, error.message);
+    secureLogger.warn(`❌ Erreur auth (${authDuration}ms): Erreur de vérification`);
     return null;
   }
 };
@@ -76,10 +80,10 @@ const requestMonitoringPlugin = {
     return {
       didResolveOperation(requestContext) {
         const { operationName, request } = requestContext;
-        console.log(`🔍 GraphQL Operation: ${operationName || 'Anonymous'}`);
+        secureLogger.info(`🔍 GraphQL Operation: ${operationName || 'Anonymous'}`);
         
         if (process.env.NODE_ENV === 'development') {
-          console.log(`📝 Query: ${request.query.substring(0, 100)}...`);
+          secureLogger.debug(`📝 Query: ${request.query.substring(0, 100)}...`);
         }
       },
       
@@ -87,7 +91,7 @@ const requestMonitoringPlugin = {
         const duration = Date.now() - requestStart;
         performanceStats.totalErrors++;
         
-        console.error(`❌ GraphQL Errors (${duration}ms):`, 
+        secureLogger.error(`❌ GraphQL Errors (${duration}ms):`, 
           requestContext.errors.map(err => err.message)
         );
       },
@@ -103,9 +107,9 @@ const requestMonitoringPlugin = {
         requestContext.response.http.headers.set('X-Total-Requests', performanceStats.totalRequests);
         
         if (duration > 1000) {
-          console.log(`⚠️ Requête lente détectée: ${duration}ms`);
+          secureLogger.warn(`⚠️ Requête lente détectée: ${duration}ms`);
         } else {
-          console.log(`⚡ Requête traitée en ${duration}ms`);
+          secureLogger.debug(`⚡ Requête traitée en ${duration}ms`);
         }
       }
     };
@@ -148,17 +152,17 @@ const securityPlugin = {
         const queryLength = request.query.length;
         
         if (queryDepth > 10) {
-          console.log(`⚠️ Requête complexe détectée: profondeur ${queryDepth}`);
+          secureLogger.warn(`⚠️ Requête complexe détectée: profondeur ${queryDepth}`);
         }
         
         if (queryLength > 5000) {
-          console.log(`⚠️ Requête volumineuse détectée: ${queryLength} caractères`);
+          secureLogger.warn(`⚠️ Requête volumineuse détectée: ${queryLength} caractères`);
         }
         
         // Rate limiting basique
         const userAgent = requestContext.request.http?.headers.get('user-agent');
         if (userAgent && userAgent.includes('bot')) {
-          console.log('🤖 Bot détecté:', userAgent);
+          secureLogger.info('🤖 Bot détecté: User-Agent suspect');
         }
       }
     };
@@ -170,11 +174,12 @@ const server = new ApolloServer({
   typeDefs,
   resolvers,
   
-  // Plugins d'optimisation
+  // Plugins d'optimisation et sécurité
   plugins: [
     requestMonitoringPlugin,
     cacheIntelligentPlugin,
-    securityPlugin
+    securityPlugin,
+    createSecurityMiddleware() // Middleware de sécurité avancé
   ],
   
   context: async ({ event, context }) => {
@@ -191,7 +196,7 @@ const server = new ApolloServer({
       const user = await getUser(event);
       
       const contextDuration = Date.now() - contextStart;
-      console.log(`🔧 Contexte GraphQL créé en ${contextDuration}ms`);
+      secureLogger.debug(`🔧 Contexte GraphQL créé en ${contextDuration}ms`);
       
       return {
         headers: event.headers,
@@ -203,7 +208,7 @@ const server = new ApolloServer({
         startTime: contextStart
       };
     } catch (error) {
-      console.error('❌ Erreur création contexte:', error);
+      secureLogger.error('❌ Erreur création contexte: Erreur d\'initialisation');
       throw new Error('Erreur d\'initialisation du contexte GraphQL');
     }
   },
@@ -220,7 +225,7 @@ const server = new ApolloServer({
       positions: err.positions
     };
     
-    console.error('🔥 GraphQL Error (Phase 2):', errorInfo);
+    secureLogger.error('🔥 GraphQL Error (Phase 2):', errorInfo);
     
     // Incrémenter les stats d'erreur
     performanceStats.totalErrors++;
@@ -285,11 +290,12 @@ const server = new ApolloServer({
 export const handler = server.createHandler({
   cors: {
     origin: process.env.NODE_ENV === 'production' ? 
-      (process.env.ALLOWED_ORIGINS?.split(',') || ['https://yourdomain.com']) : '*',
+      ['https://perkup.app', 'https://www.perkup.app', 'https://admin.perkup.app'] : 
+      ['http://localhost:3000', 'http://localhost:3001'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
     methods: ['GET', 'POST', 'OPTIONS'],
-    maxAge: 86400 // 24h
+    maxAge: 3600 // 1h pour sécurité
   },
   
   context: ({ event, context }) => {

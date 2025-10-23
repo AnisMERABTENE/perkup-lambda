@@ -12,7 +12,11 @@ export class PartnerCache {
       'partners',
       async () => {
         const partner = await Partner.findById(partnerId);
-        return partner ? partner.toObject() : null;
+        if (!partner) return null;
+        const obj = partner.toObject();
+        obj._id = obj._id.toString();
+        if (obj.owner) obj.owner = obj.owner.toString();
+        return obj;
       }
     );
   }
@@ -26,7 +30,12 @@ export class PartnerCache {
       'partners',
       async () => {
         const partners = await Partner.find({ owner: vendorId }).sort({ createdAt: -1 });
-        return partners.map(p => p.toObject());
+        return partners.map(p => {
+          const obj = p.toObject();
+          obj._id = obj._id.toString();
+          if (obj.owner) obj.owner = obj.owner.toString();
+          return obj;
+        });
       },
       1800 // 30min TTL
     );
@@ -60,7 +69,12 @@ export class PartnerCache {
         }
         
         const partners = await Partner.find(query).limit(50);
-        return partners.map(p => p.toObject());
+        return partners.map(p => {
+          const obj = p.toObject();
+          obj._id = obj._id.toString();
+          if (obj.owner) obj.owner = obj.owner.toString();
+          return obj;
+        });
       },
       3600 // 1h TTL pour géo
     );
@@ -94,7 +108,12 @@ export class PartnerCache {
           category, 
           isActive: true 
         }).sort({ name: 1 });
-        return partners.map(p => p.toObject());
+        return partners.map(p => {
+          const obj = p.toObject();
+          obj._id = obj._id.toString();
+          if (obj.owner) obj.owner = obj.owner.toString();
+          return obj;
+        });
       }
     );
   }
@@ -105,8 +124,8 @@ export class PartnerCache {
     
     console.log('Cache search avec filtres:', filters);
     
-    // Générer une clé de cache basée sur tous les filtres
-    const filterKey = JSON.stringify({ lat, lng, radius, category, city, name, limit });
+    // Générer une clé de cache basée sur tous les filtres (v2 pour forcer invalidation)
+    const filterKey = JSON.stringify({ lat, lng, radius, category, city, name, limit, v: 2 });
     const cacheKey = `search:${Buffer.from(filterKey).toString('base64').substring(0, 20)}`;
     
     return await cacheService.getOrSet(
@@ -181,7 +200,12 @@ export class PartnerCache {
         
         console.log('Résultats MongoDB:', partners.length, 'partenaires trouvés');
         
-        return partners.map(p => p.toObject());
+        return partners.map(p => {
+          const obj = p.toObject();
+          obj._id = obj._id.toString();
+          if (obj.owner) obj.owner = obj.owner.toString();
+          return obj;
+        });
       },
       600 // 10min TTL pour recherches
     );
