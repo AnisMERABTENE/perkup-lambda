@@ -208,62 +208,88 @@ export const useStore = (): UseStoreReturn => {
     }
   }, []);
 
-  // 🔄 Géocodage inverse (coordonnées → adresse) - Backend sécurisé
+  // 🔄 Géocodage inverse (coordonnées → adresse) avec Expo Location
   const reverseGeocode = useCallback(async (latitude: number, longitude: number): Promise<string | null> => {
     try {
-      console.log('🔄 Géocodage inverse via backend:', latitude, longitude);
+      console.log('🔄 Géocodage inverse des coordonnées:', latitude, longitude);
       
-      const result = await reverseGeocodeViaBackend(latitude, longitude);
-      
-      if (result.success && result.formattedAddress) {
-        console.log('✅ Adresse trouvée via backend:', result.formattedAddress);
-        return result.formattedAddress;
-      }
-      
-      // Fallback vers Expo Location si backend échoue
-      console.log('🔄 Fallback vers Expo Location...');
-      const fallbackResult = await Location.reverseGeocodeAsync({
+      // Utiliser directement Expo Location pour le reverse geocoding
+      const results = await Location.reverseGeocodeAsync({
         latitude,
         longitude,
       });
 
-      if (fallbackResult.length > 0) {
-        const address = fallbackResult[0];
-        const fullAddress = [
-          address.streetNumber,
-          address.street,
-          address.postalCode,
-          address.city,
-          address.country
-        ].filter(Boolean).join(' ');
+      if (results && results.length > 0) {
+        const address = results[0];
+        console.log('📍 Adresse trouvée:', address);
         
-        console.log('✅ Adresse fallback trouvée:', fullAddress);
-        return fullAddress;
+        // Construire l'adresse formatée
+        const addressParts = [];
+        
+        // Numéro et rue
+        if (address.streetNumber) {
+          addressParts.push(address.streetNumber);
+        }
+        if (address.street) {
+          addressParts.push(address.street);
+        } else if (address.name) {
+          // Parfois l'adresse est dans 'name'
+          addressParts.push(address.name);
+        }
+        
+        // Code postal et ville
+        if (address.postalCode) {
+          addressParts.push(address.postalCode);
+        }
+        if (address.city) {
+          addressParts.push(address.city);
+        }
+        
+        // Région et pays
+        if (address.region && address.region !== address.city) {
+          addressParts.push(address.region);
+        }
+        if (address.country) {
+          addressParts.push(address.country);
+        }
+        
+        const fullAddress = addressParts.filter(Boolean).join(', ');
+        
+        console.log('✅ Adresse formatée:', fullAddress);
+        return fullAddress || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
       }
       
-      return null;
+      // Si aucune adresse trouvée, retourner les coordonnées
+      console.log('⚠️ Aucune adresse trouvée pour ces coordonnées');
+      return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+      
     } catch (error) {
       console.error('❌ Erreur géocodage inverse:', error);
-      return null;
+      // En cas d'erreur, retourner les coordonnées
+      return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
     }
   }, []);
 
-  // 🌍 Géocodage direct (adresse → coordonnées) - Backend sécurisé
+  // 🌍 Géocodage direct (adresse → coordonnées) avec Expo Location
   const geocodeAddress = useCallback(async (address: string): Promise<{ latitude: number; longitude: number } | null> => {
     try {
-      console.log('🌍 Géocodage adresse via backend:', address);
+      console.log('🌍 Géocodage de l\'adresse:', address);
       
-      const result = await geocodeAddressViaBackend(address);
+      // Utiliser Expo Location pour le geocoding
+      const results = await Location.geocodeAsync(address);
       
-      if (result.success && result.latitude && result.longitude) {
-        console.log('✅ Coordonnées trouvées via backend:', result.latitude, result.longitude);
+      if (results && results.length > 0) {
+        const location = results[0];
+        console.log('✅ Coordonnées trouvées:', location.latitude, location.longitude);
         return {
-          latitude: result.latitude,
-          longitude: result.longitude,
+          latitude: location.latitude,
+          longitude: location.longitude,
         };
       }
       
+      console.log('⚠️ Aucune coordonnée trouvée pour cette adresse');
       return null;
+      
     } catch (error) {
       console.error('❌ Erreur géocodage adresse:', error);
       return null;

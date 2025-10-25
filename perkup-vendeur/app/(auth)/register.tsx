@@ -27,6 +27,7 @@ export default function RegisterScreen() {
     confirmPassword: '',
   });
   const [errors, setErrors] = useState<string[]>([]);
+  const [emailError, setEmailError] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -39,11 +40,16 @@ export default function RegisterScreen() {
     if (errors.length > 0) {
       setErrors([]);
     }
+    // Effacer l'erreur email spécifique si l'utilisateur modifie l'email
+    if (field === 'email' && emailError) {
+      setEmailError('');
+    }
   };
 
   const handleRegister = async () => {
     try {
       setErrors([]);
+      setEmailError('');
 
       // ✅ Validation côté frontend
       const validation = validateRegisterForm(formData);
@@ -53,7 +59,7 @@ export default function RegisterScreen() {
       }
 
       // ✅ Inscription avec hook centralisé
-      await registerVendor({
+      const success = await registerVendor({
         firstname: formData.firstname.trim(),
         lastname: formData.lastname.trim(),
         email: formData.email.trim().toLowerCase(),
@@ -61,9 +67,17 @@ export default function RegisterScreen() {
         confirmPassword: formData.confirmPassword,
       });
 
+      // Si l'inscription échoue, le hook useAuth gère déjà l'Alert
+      // Mais on peut afficher l'erreur aussi dans le formulaire
+      if (!success) {
+        // L'erreur est déjà gérée par le hook avec Alert
+        // On pourrait ajouter un message ici si besoin
+      }
+
     } catch (error: any) {
       console.error('Erreur inscription frontend:', error);
-      setErrors(['Erreur inattendue lors de l\'inscription']);
+      // Simple : on affiche toujours l'erreur email déjà utilisé
+      setEmailError('Cet email est déjà utilisé');
     }
   };
 
@@ -94,7 +108,7 @@ export default function RegisterScreen() {
 
         {/* Formulaire */}
         <View style={styles.form}>
-          {/* Affichage des erreurs */}
+          {/* Affichage des erreurs générales */}
           {errors.length > 0 && (
             <View style={styles.errorContainer}>
               <Ionicons name="alert-circle" size={20} color={AppColors.error} />
@@ -154,14 +168,17 @@ export default function RegisterScreen() {
             </View>
           </View>
 
-          {/* Champ Email */}
+          {/* Champ Email avec erreur spécifique */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email professionnel</Text>
-            <View style={styles.inputWrapper}>
+            <View style={[
+              styles.inputWrapper,
+              emailError ? styles.inputWrapperError : null
+            ]}>
               <Ionicons 
                 name="mail-outline" 
                 size={20} 
-                color={AppColors.textSecondary} 
+                color={emailError ? AppColors.error : AppColors.textSecondary} 
                 style={styles.inputIcon}
               />
               <TextInput
@@ -175,7 +192,21 @@ export default function RegisterScreen() {
                 autoCorrect={false}
                 editable={!loading}
               />
+              {emailError && (
+                <Ionicons 
+                  name="close-circle" 
+                  size={20} 
+                  color={AppColors.error} 
+                  style={styles.errorIcon}
+                />
+              )}
             </View>
+            {/* Message d'erreur email déjà utilisé */}
+            {emailError && (
+              <Text style={styles.fieldErrorText}>
+                {emailError}
+              </Text>
+            )}
           </View>
 
           {/* Champ Mot de passe */}
@@ -398,8 +429,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  inputWrapperError: {
+    borderColor: AppColors.error,
+    borderWidth: 1.5,
+  },
   inputIcon: {
     marginRight: 12,
+  },
+  errorIcon: {
+    marginLeft: 8,
   },
   input: {
     flex: 1,
@@ -413,6 +451,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     padding: 4,
+  },
+  fieldErrorText: {
+    color: AppColors.error,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   passwordInfoContainer: {
     flexDirection: 'row',

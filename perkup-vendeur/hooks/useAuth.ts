@@ -151,13 +151,8 @@ export const useAuth = (): UseAuthReturn => {
     } catch (error: any) {
       console.error('❌ Erreur inscription vendeur:', error);
       
-      let errorMessage = 'Erreur lors de l\'inscription.';
-      if (error.graphQLErrors?.length > 0) {
-        errorMessage = error.graphQLErrors[0].message;
-      }
-      
-      Alert.alert('Erreur d\'inscription', errorMessage);
-      return false;
+      // NE PAS afficher d'Alert, juste lancer l'erreur pour qu'elle soit capturée par le formulaire
+      throw error;
     } finally {
       setLoading(false);
     }
