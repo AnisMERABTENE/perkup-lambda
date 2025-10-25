@@ -1,4 +1,5 @@
 import { createStoreHandler, updateStoreHandler, getVendorProfileHandler, getVendorStoresHandler } from '../../handlers/vendor/storeHandler.js';
+import { generateUploadSignature } from '../../services/cloudinaryService.js';
 import { withAuth } from '../../middlewares/checkSubscription.js';
 
 const vendorResolvers = {
@@ -21,6 +22,25 @@ const vendorResolvers = {
       }
       
       return await getVendorStoresHandler(event);
+    }),
+
+    generateUploadSignature: withAuth(async (_, args, context) => {
+      if (context.user.role !== 'vendor') {
+        throw new Error('Accès réservé aux vendeurs');
+      }
+
+      try {
+        const { folder } = args.input || {};
+        console.log('🔑 Génération signature upload pour vendeur:', context.user.id);
+        
+        return generateUploadSignature(folder || 'vendor-logos');
+      } catch (error) {
+        console.error('❌ Erreur génération signature:', error);
+        return {
+          success: false,
+          error: error.message || 'Erreur lors de la génération de signature'
+        };
+      }
     })
   },
 

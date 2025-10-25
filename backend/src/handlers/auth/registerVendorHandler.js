@@ -30,12 +30,13 @@ export const handler = async (event) => {
       password: hashedPassword,
       verificationCode,
       role: "vendor",
+      isVerified: true, // ✅ Vendeurs vérifiés automatiquement
     });
 
     await user.save();
-    await sendVerificationEmail(email, verificationCode);
+    // Pas d'envoi d'email pour les vendeurs
 
-    return { message: "Compte vendeur créé. Vérifiez votre email pour entrer le code." };
+    return { message: "Compte vendeur créé avec succès ! Vous pouvez maintenant créer votre boutique." };
   } catch (err) {
     console.error("❌ Erreur registerVendor:", err);
     throw new Error(err.message || "Erreur serveur");

@@ -2,6 +2,7 @@ import Partner from '../../models/Partner.js';
 import User from '../../models/User.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
+import { validateCloudinaryUrl } from '../../services/cloudinaryService.js';
 import GeocodingService from '../../services/geocodingService.js';
 
 // Créer une boutique
@@ -31,6 +32,11 @@ export const createStoreHandler = async (event) => {
     
     if (discount < 0 || discount > 100) {
       throw new Error('La réduction doit être entre 0 et 100%');
+    }
+
+    // Valider l'URL du logo si fournie
+    if (logo && !validateCloudinaryUrl(logo)) {
+      throw new Error('URL du logo invalide. L\'image doit être uploadée via notre système.');
     }
     
     console.log(`Création boutique: ${name}`);

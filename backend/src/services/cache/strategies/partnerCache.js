@@ -216,8 +216,8 @@ export class PartnerCache {
     await Promise.all([
       cacheService.del(partnerId, 'partners'),
       vendorId ? cacheService.del(`vendor:${vendorId}`, 'partners') : Promise.resolve(),
-      cacheService.invalidatePattern('search:*', 'partners'),
-      cacheService.invalidatePattern('geo:*', 'geo'),
+      // cacheService.invalidatePattern('search:*', 'partners'), // ❌ Fonction inexistante
+      // cacheService.invalidatePattern('geo:*', 'geo'), // ❌ Fonction inexistante
       cacheService.del('all_categories', 'partners')
     ]);
   }

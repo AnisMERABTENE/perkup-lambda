@@ -24,6 +24,33 @@ const vendorTypeDefs = `
   input LocationInput {
     coordinates: [Float!]!
   }
+
+  input GenerateUploadSignatureInput {
+    folder: String
+  }
+
+  type UploadSignature {
+    signature: String!
+    timestamp: Int!
+    cloudName: String!
+    apiKey: String!
+    uploadParams: UploadParams!
+  }
+
+  type UploadParams {
+    folder: String!
+    resource_type: String!
+    allowed_formats: String!
+    transformation: String!
+    overwrite: Boolean!
+    invalidate: Boolean!
+  }
+
+  type GenerateUploadSignatureResponse {
+    success: Boolean!
+    data: UploadSignature
+    error: String
+  }
   
   type Store {
     id: ID!
@@ -85,6 +112,7 @@ const vendorTypeDefs = `
   extend type Query {
     getVendorProfile: VendorProfile!
     getVendorStores: VendorStoresResponse!
+    generateUploadSignature(input: GenerateUploadSignatureInput): GenerateUploadSignatureResponse!
   }
 
   extend type Mutation {
