@@ -3,9 +3,10 @@ import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import { RetryLink } from '@apollo/client/link/retry';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_CONFIG, AUTH_CONFIG, CACHE_CONFIG } from '@/constants/Config';
 
 // ✅ URL de votre API GraphQL déployée sur AWS
-const BACKEND_URL = 'https://63g5x92epf.execute-api.eu-west-1.amazonaws.com/prod/graphql';
+const BACKEND_URL = API_CONFIG.GRAPHQL_URL;
 
 // 🔗 Lien HTTP optimisé
 const httpLink = createHttpLink({
@@ -29,12 +30,36 @@ const retryLink = new RetryLink({
   }
 });
 
-// ❌ Error link pour gestion centralisée
+// ❌ Error link pour gestion centralisée + AUTH
 const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
   if (graphQLErrors) {
-    graphQLErrors.forEach(({ message, locations, path }) =>
-      console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`)
-    );
+    graphQLErrors.forEach(({ message, locations, path }) => {
+      console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`);
+      
+      // 🔐 Gestion centralisée des erreurs d'authentification
+      if (message.includes('Authentification requise') || 
+          message.includes('Token invalide') ||
+          message.includes('Non autorisé')) {
+        console.log('🔐 Erreur auth détectée, nettoyage...');
+        
+        // Nettoyer les données d'auth et rediriger
+        (async () => {
+          try {
+            clearAuthCache();
+            await require('@/utils/storage').clearAuthData();
+            console.log('✅ Données auth nettoyées');
+            
+            // 🔄 Redirection vers login après nettoyage
+            const { router } = require('expo-router');
+            setTimeout(() => {
+              router.replace('/(auth)/login');
+            }, 100);
+          } catch (error) {
+            console.error('❌ Erreur nettoyage auth:', error);
+          }
+        })();
+      }
+    });
   }
   if (networkError) {
     console.error(`Network error: ${networkError}`);
@@ -51,12 +76,21 @@ const authLink = setContext(async (_, { headers }) => {
     if (!cachedToken || Date.now() > tokenExpiry) {
       cachedToken = await AsyncStorage.getItem('authToken');
       tokenExpiry = Date.now() + 5 * 60 * 1000; // Cache 5min
+      
+      // 🔍 DEBUG: Log du token pour diagnostic
+      if (cachedToken) {
+        console.log('🔐 Token récupéré:', cachedToken.substring(0, 20) + '...');
+      } else {
+        console.log('❌ Aucun token trouvé dans AsyncStorage');
+      }
     }
+    
+    const authHeader = cachedToken ? `Bearer ${cachedToken}` : '';
     
     return {
       headers: {
         ...headers,
-        authorization: cachedToken ? `Bearer ${cachedToken}` : '',
+        authorization: authHeader,
         // ✅ Headers pour optimiser le cache backend
         'x-client-version': '1.0.0',
         'x-platform': 'mobile'

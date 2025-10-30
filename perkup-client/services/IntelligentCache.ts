@@ -330,6 +330,7 @@ class IntelligentGlobalCache {
         if (shouldRemove) {
           await AsyncStorage.removeItem(key);
           removed++;
+          console.log(`🗑️ Suppression clé cache: ${key}`);
         }
       }
       
@@ -349,23 +350,40 @@ class IntelligentGlobalCache {
     options: any
   ): Promise<boolean> {
     
+    // ✅ NOUVELLE LOGIQUE: Si on ne veut pas garder les segments, les supprimer
+    if (key.includes(':segment:') && !options.keepSegment) {
+      console.log(`🗑️ Suppression segment: ${key}`);
+      return true;
+    }
+    
+    // ✅ NOUVELLE LOGIQUE: Si on ne veut pas garder les globaux, les supprimer  
+    if (key.includes(':global:') && !options.keepGlobal) {
+      console.log(`🗑️ Suppression global: ${key}`);
+      return true;
+    }
+    
+    // ✅ NOUVELLE LOGIQUE: Si on ne veut pas garder les users, les supprimer
+    if (key.includes(':user:') && !options.keepCurrentUser) {
+      console.log(`🗑️ Suppression user: ${key}`);
+      return true;
+    }
+    
     // Vérifier expiration si demandé
     if (options.forceCleanExpired) {
       const cached = await this.getFromStorage(key);
-      if (!cached) return true;
+      if (!cached) {
+        console.log(`🗑️ Suppression clé corrompue: ${key}`);
+        return true;
+      }
       
       const type = key.includes(':global:') ? 'global' : 
                    key.includes(':segment:') ? 'segment' : 'user';
       
       if (this.isExpired(cached.timestamp, type)) {
+        console.log(`🗑️ Suppression expirée: ${key}`);
         return true;
       }
     }
-    
-    // Règles de conservation
-    if (key.includes(':global:') && options.keepGlobal) return false;
-    if (key.includes(':segment:') && options.keepSegment) return false;
-    if (key.includes(':user:') && options.keepCurrentUser) return false;
     
     return false;
   }

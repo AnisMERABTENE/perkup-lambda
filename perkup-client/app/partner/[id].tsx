@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Linking,
   Image,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -16,33 +15,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@apollo/client/react';
 
 import AppColors from '@/constants/Colors';
-import { GET_PARTNERS } from '@/graphql/queries/partners';
+import { GET_PARTNER_DETAIL } from '@/graphql/queries/partners';
 
 const { width } = Dimensions.get('window');
 
 export default function PartnerDetailScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
-  const [partnerData, setPartnerData] = useState<any>(null);
+  // ✅ CORRIGÉ: Utilise directement l'ID MongoDB depuis l'URL
+  const { id } = useLocalSearchParams<{ id: string }>();
+  
+  console.log('🔍 Partner Detail - ID reçu:', { id });
 
-  // Décoder le slug pour retrouver le nom
-  const partnerName = slug ? decodeURIComponent(slug).replace(/-/g, ' ') : '';
-
-  // Query pour récupérer tous les partenaires et filtrer par nom
-  const { data, loading, error } = useQuery(GET_PARTNERS, {
+  // 🚀 OPTIMISÉ: Utilise GET_PARTNER_DETAIL avec cache partagé par plan
+  const { data, loading, error } = useQuery(GET_PARTNER_DETAIL, {
+    variables: { id },
     errorPolicy: 'all',
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // ✅ Profite du cache partagé backend
     notifyOnNetworkStatusChange: true,
+    skip: !id, // Ne pas exécuter si pas d'ID
   });
 
-  useEffect(() => {
-    if (data?.getPartners?.partners && partnerName) {
-      // Chercher le partenaire par nom (case insensitive)
-      const partner = data.getPartners.partners.find((p: any) => 
-        p.name.toLowerCase() === partnerName.toLowerCase()
-      );
-      setPartnerData(partner);
-    }
-  }, [data, partnerName]);
+  const partnerData = data?.getPartner;
 
   const handleCall = () => {
     if (partnerData?.phone) {
@@ -183,7 +175,7 @@ export default function PartnerDetailScreen() {
               <View style={styles.discountRow}>
                 <Ionicons name="person-circle" size={20} color={AppColors.success} />
                 <View style={styles.discountInfo}>
-                  <Text style={styles.discountLabel}>Votre accès Premium</Text>
+                  <Text style={styles.discountLabel}>Votre accès {partnerData.userPlan}</Text>
                   <Text style={[styles.discountValue, { color: AppColors.success }]}>{partnerData.userDiscount}%</Text>
                 </View>
               </View>

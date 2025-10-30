@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useMutation } from '@apollo/client/react';
-import { Alert } from 'react-native';
+import { Alert, DeviceEventEmitter } from 'react-native';
 import { router } from 'expo-router';
 
 import { 
@@ -79,6 +79,15 @@ export const useAuth = (): UseAuthReturn => {
         await preloadCriticalData(user.id);
 
         console.log('✅ Connexion réussie:', user.email, 'Role:', user.role);
+
+        // 🔄 NOTIFIER L'AUTH PROVIDER avec DeviceEventEmitter
+        DeviceEventEmitter.emit('authStateChanged', {
+          type: 'login',
+          user,
+          token
+        });
+        
+        console.log('📢 Événement login émis vers AuthProvider');
 
         // ✅ Redirection intelligente
         Alert.alert('Connexion réussie', message, [
@@ -249,7 +258,13 @@ export const useAuth = (): UseAuthReturn => {
       clearAuthCache();
       await clearAuthData();
       
+      // 📢 NOTIFIER L'AUTH PROVIDER de la déconnexion
+      DeviceEventEmitter.emit('authStateChanged', {
+        type: 'logout'
+      });
+      
       console.log('✅ Déconnexion terminée');
+      console.log('📢 Événement logout émis vers AuthProvider');
       
       // Redirection vers login
       router.replace('/(auth)/login');

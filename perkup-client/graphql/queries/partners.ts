@@ -1,49 +1,6 @@
-// 🔍 VERSION ULTRA-LÉGÈRE POUR SUGGESTIONS
-export const SEARCH_PARTNERS_SUGGESTIONS = gql`
-  query SearchPartnersSuggestions($name: String, $limit: Int = 5) {
-    searchPartners(name: $name, limit: $limit) {
-      partners {
-        name
-        category
-        city
-        userDiscount
-      }
-      totalFound
-    }
-  }
-`;
+import { gql } from '@apollo/client';
 
-// 📋 DÉTAIL COMPLET D'UN PARTENAIRE (lazy loading)
-export const GET_PARTNER_DETAIL = gql`
-  query GetPartnerDetail($id: ID!) {
-    getPartner(id: $id) {
-      id
-      name
-      category
-      address
-      city
-      zipCode
-      logo
-      description
-      phone
-      website
-      location {
-        latitude
-        longitude
-      }
-      offeredDiscount
-      userDiscount
-      isPremiumOnly
-      userPlan
-      canAccessFullDiscount
-      needsSubscription
-      createdAt
-      updatedAt
-    }
-  }
-`;import { gql } from '@apollo/client';
-
-// 📝 RÉCUPÉRER TOUS LES PARTENAIRES
+// 📝 RÉCUPÉRER TOUS LES PARTENAIRES AVEC LOCATION
 export const GET_PARTNERS = gql`
   query GetPartners($category: String) {
     getPartners(category: $category) {
@@ -57,6 +14,10 @@ export const GET_PARTNERS = gql`
         discount
         description
         logo
+        location {
+          latitude
+          longitude
+        }
         offeredDiscount
         userDiscount
         isPremiumOnly
@@ -163,6 +124,58 @@ export const GET_CITY_COORDINATES = gql`
       cityCoordinates
       totalCities
       cities
+    }
+  }
+`;
+
+// 🔍 VERSION ULTRA-LÉGÈRE POUR SUGGESTIONS
+export const SEARCH_PARTNERS_SUGGESTIONS = gql`
+  query SearchPartnersSuggestions($name: String, $limit: Int = 5) {
+    searchPartners(name: $name, limit: $limit) {
+      partners {
+        name
+        category
+        city
+        userDiscount
+      }
+      totalFound
+    }
+  }
+`;
+
+// 📋 DÉTAIL COMPLET D'UN PARTENAIRE (lazy loading)
+export const GET_PARTNER_DETAIL = gql`
+  query GetPartnerDetail($id: ID!) {
+    getPartner(id: $id) {
+      id
+      name
+      category
+      address
+      city
+      zipCode
+      logo
+      description
+      phone
+      website
+      location {
+        latitude
+        longitude
+      }
+      offeredDiscount
+      userDiscount
+      isPremiumOnly
+      userPlan
+      canAccessFullDiscount
+      needsSubscription
+      createdAt
+      updatedAt
+      _cacheInfo {
+        generatedAt
+        forPlan
+        cacheKey
+        source
+        retrievedAt
+      }
     }
   }
 `;

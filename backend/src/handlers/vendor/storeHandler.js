@@ -4,6 +4,7 @@ import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
 import { validateCloudinaryUrl } from '../../services/cloudinaryService.js';
 import GeocodingService from '../../services/geocodingService.js';
+import { websocketService } from '../../services/websocketService.js';
 
 // Créer une boutique
 export const createStoreHandler = async (event) => {
@@ -89,8 +90,26 @@ export const createStoreHandler = async (event) => {
     
     console.log(`Boutique créée avec coordonnées précises: ${name} - ${coordinates[1]}, ${coordinates[0]}`);
     
-    // Invalider les caches
+    // 🔥 INVALIDATION CACHE + NOTIFICATION WEBSOCKET TEMPS RÉEL
     await PartnerCache.invalidatePartner(store._id, userId);
+    
+    // 📡 Notifier tous les clients en temps réel
+    await websocketService.notifyPartnerChangeByLocation(
+      store._id.toString(),
+      'created',
+      {
+        id: store._id.toString(),
+        name: store.name,
+        category: store.category,
+        city: store.city,
+        discount: store.discount
+      },
+      store.city,
+      store.category
+    );
+    
+    // 🔄 Notifier invalidation cache globale
+    await websocketService.notifyCacheInvalidation(['partners', 'search', 'categories']);
     
     return {
       message: "Boutique créée avec succès",
@@ -194,8 +213,26 @@ export const updateStoreHandler = async (event) => {
     
     console.log(`Boutique modifiée: ${name}`);
     
-    // Invalider les caches
+    // 🔥 INVALIDATION CACHE + NOTIFICATION WEBSOCKET TEMPS RÉEL
     await PartnerCache.invalidatePartner(updatedStore._id, userId);
+    
+    // 📡 Notifier modification en temps réel
+    await websocketService.notifyPartnerChangeByLocation(
+      updatedStore._id.toString(),
+      'updated',
+      {
+        id: updatedStore._id.toString(),
+        name: updatedStore.name,
+        category: updatedStore.category,
+        city: updatedStore.city,
+        discount: updatedStore.discount
+      },
+      updatedStore.city,
+      updatedStore.category
+    );
+    
+    // 🔄 Notifier invalidation cache
+    await websocketService.notifyCacheInvalidation(['partners', 'search', 'categories']);
     
     return {
       message: "Boutique mise à jour avec succès",

@@ -26,6 +26,11 @@ provider:
     EMAIL_SOURCE: ${env:EMAIL_SOURCE}
     SES_REGION: ${env:SES_REGION}
     
+    # WebSocket Configuration
+    WEBSOCKET_CONNECTIONS_TABLE: "perkup-websocket-connections"
+    WEBSOCKET_API_ENDPOINT:
+      Fn::Sub: "https://${WebsocketsApi}.execute-api.${AWS::Region}.amazonaws.com/${opt:stage, 'dev'}"
+    
     # Cloudinary Configuration
     CLOUDINARY_CLOUD_NAME: ${env:CLOUDINARY_CLOUD_NAME}
     CLOUDINARY_API_KEY: ${env:CLOUDINARY_API_KEY}
@@ -132,6 +137,8 @@ functions:
     handler: src/handlers/websocket/connectHandler.handler
     timeout: 30
     memorySize: 256
+    environment:
+      WEBSOCKET_CONNECTIONS_TABLE: "perkup-websocket-connections"
     events:
       - websocket:
           route: $connect
@@ -140,6 +147,8 @@ functions:
     handler: src/handlers/websocket/disconnectHandler.handler
     timeout: 30
     memorySize: 256
+    environment:
+      WEBSOCKET_CONNECTIONS_TABLE: "perkup-websocket-connections"
     events:
       - websocket:
           route: $disconnect
@@ -148,9 +157,11 @@ functions:
     handler: src/handlers/websocket/messageHandler.handler
     timeout: 30
     memorySize: 512
+    environment:
+      WEBSOCKET_CONNECTIONS_TABLE: "perkup-websocket-connections"
     events:
       - websocket:
-          route: message
+          route: $default
 
   # 🛡️ RATE LIMITING DISTRIBUÉE (Phase 1)
   rateLimiter:
@@ -375,6 +386,33 @@ resources:
         PointInTimeRecoverySpecification:
           PointInTimeRecoveryEnabled: true
 
+    # 🔥 TABLE WEBSOCKET CONNECTIONS
+    WebSocketConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: perkup-websocket-connections
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+
     # 🚀 SNS pour notifications distribuées
     NotificationTopic:
       Type: AWS::SNS::Topic
@@ -386,7 +424,7 @@ resources:
     MonitoringDashboard:
       Type: AWS::CloudWatch::Dashboard
       Properties:
-        DashboardName: perkup-performance-dev
+        DashboardName: perkup-performance-${opt:stage, 'dev'}  # Utilise le stage dans le nom
         DashboardBody:
           Fn::Sub: |
             {

@@ -30,7 +30,7 @@ export default function StoreInfoScreen() {
     category: '',
     address: '',
     phone: '',
-    discount: 3, // Minimum 3%
+    discount: '', // On laisse vide par défaut pour pouvoir tout effacer
     description: '',
     logo: '',
   });
@@ -170,8 +170,18 @@ export default function StoreInfoScreen() {
     try {
       setErrors([]);
 
+      // Vérifier le discount minimum
+      const discountValue = parseInt(formData.discount) || 0;
+      if (discountValue < 3) {
+        setErrors(['Le pourcentage de réduction minimum est de 3%']);
+        return;
+      }
+
       // ✅ Validation côté frontend
-      const validation = validateStoreForm(formData);
+      const validation = validateStoreForm({
+        ...formData,
+        discount: discountValue
+      });
       if (!validation.isValid) {
         setErrors(validation.errors);
         return;
@@ -189,7 +199,7 @@ export default function StoreInfoScreen() {
         category: formData.category,
         address: formData.address.trim(),
         phone: formData.phone.trim(),
-        discount: formData.discount,
+        discount: discountValue,
         description: formData.description.trim() || undefined,
         logo: formData.logo || undefined,
         location: {
@@ -391,7 +401,7 @@ export default function StoreInfoScreen() {
             </View>
           </View>
 
-          {/* Pourcentage de réduction */}
+          {/* Pourcentage de réduction - MODIFIÉ POUR PERMETTRE D'EFFACER */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Pourcentage de réduction offert * (minimum 3%)</Text>
             <View style={styles.inputWrapper}>
@@ -403,18 +413,33 @@ export default function StoreInfoScreen() {
               />
               <TextInput
                 style={styles.input}
-                placeholder="3"
+                placeholder="Minimum 3%"
                 placeholderTextColor={AppColors.textLight}
                 value={formData.discount.toString()}
                 onChangeText={(value) => {
-                  const numValue = parseInt(value) || 3;
-                  handleInputChange('discount', Math.max(3, Math.min(100, numValue)));
+                  // Permettre d'effacer complètement le champ
+                  if (value === '') {
+                    handleInputChange('discount', '');
+                  } else {
+                    // Accepter seulement les chiffres
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue)) {
+                      // Limiter à 100 maximum
+                      handleInputChange('discount', Math.min(100, numValue));
+                    }
+                  }
                 }}
                 keyboardType="numeric"
                 editable={!loading}
               />
               <Text style={styles.percentageSymbol}>%</Text>
             </View>
+            {/* Message d'aide si le champ est vide ou < 3 */}
+            {(formData.discount === '' || parseInt(formData.discount) < 3) && (
+              <Text style={styles.helpText}>
+                Le pourcentage minimum est de 3%
+              </Text>
+            )}
           </View>
 
           {/* Description */}
@@ -668,6 +693,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: AppColors.textSecondary,
     marginLeft: 8,
+  },
+  helpText: {
+    fontSize: 12,
+    color: AppColors.warning,
+    marginTop: 4,
+    marginLeft: 4,
   },
   // Logo
   logoButton: {

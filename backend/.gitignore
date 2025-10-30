@@ -38,6 +38,14 @@ coverage/
 ehthumbs.db
 Thumbs.db
 
-# 🚀 AWS
+# 🚀 AWS & Serverless
 .aws-sam/
 samconfig.toml
+.serverless/
+serverless.yml.backup
+.serverless_plugins/
+
+# Fichiers de déploiement temporaires
+*.zip
+*.tar.gz
+.env.production

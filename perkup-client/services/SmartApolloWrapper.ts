@@ -47,7 +47,7 @@ class SmartApolloWrapper {
     
     const apolloOpts = {
       fetchPolicy: 'cache-first' as const,
-      errorPolicy: 'ignore' as const,  // ✅ Même stratégie que CacheService
+      errorPolicy: 'all' as const,  // ✅ CORRECTION: Montrer les erreurs
       ...apolloOptions
     };
     
@@ -96,6 +96,19 @@ class SmartApolloWrapper {
         loading: result.loading,
         networkStatus: result.networkStatus
       });
+      
+      // 🚨 DEBUG: Si pas de données, log plus détaillé
+      if (!data || Object.keys(data).length === 0) {
+        console.log(`🚨 DIAGNOSTIC ${cacheKey}:`, {
+          hasData: !!data,
+          dataKeys: data ? Object.keys(data) : 'N/A',
+          hasErrors: !!result.errors,
+          errorCount: result.errors?.length || 0,
+          errorMessages: result.errors?.map(e => e.message) || [],
+          networkStatus: result.networkStatus,
+          loading: result.loading
+        });
+      }
       
       // 💾 Sauvegarder dans cache intelligent
       if (config.enabled && data) {
@@ -302,12 +315,25 @@ class SmartApolloWrapper {
       }
       apolloClient.cache.gc();
       
-      // 2. Nettoyage cache intelligent (sélectif)
-      await intelligentCache.smartCleanup({
-        keepGlobal: !patterns.includes('categories') && !patterns.includes('cities'),
-        keepCurrentUser: !patterns.includes('me') && !patterns.includes('profile'),
-        keepSegment: false // Toujours nettoyer segments
-      });
+      // 2. 🔥 FORCER LA SUPPRESSION du cache intelligent pour Partners
+      if (patterns.includes('GetPartners') || patterns.includes('SearchPartners')) {
+        console.log('🔥 Invalidation FORCÉE cache Partners');
+        
+        // Supprimer tous les caches segment et global liés aux partners
+        await intelligentCache.smartCleanup({
+          keepGlobal: false,    // ✅ SUPPRIMER les globaux (Partners)
+          keepCurrentUser: true, // Garder les données user
+          keepSegment: false,   // ✅ SUPPRIMER les segments (Partners)
+          forceCleanExpired: true
+        });
+      } else {
+        // Nettoyage normal pour autres requêtes
+        await intelligentCache.smartCleanup({
+          keepGlobal: !patterns.includes('categories') && !patterns.includes('cities'),
+          keepCurrentUser: !patterns.includes('me') && !patterns.includes('profile'),
+          keepSegment: false // Toujours nettoyer segments
+        });
+      }
       
       console.log('✅ Invalidation terminée');
       

@@ -13,6 +13,8 @@ import apolloClient from '@/graphql/apolloClient';
 import { cacheService } from '@/services/CacheService';
 import { getUserData } from '@/utils/storage';
 import AppColors from '@/constants/Colors';
+import { AuthProvider } from '@/providers/AuthProvider';
+import { AuthGuard } from '@/components/AuthGuard';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -117,7 +119,11 @@ export default function RootLayout() {
 
   return (
     <ApolloProvider client={apolloClient}>
-      <RootLayoutNav />
+      <AuthProvider>
+        <AuthGuard>
+          <RootLayoutNav />
+        </AuthGuard>
+      </AuthProvider>
     </ApolloProvider>
   );
 }

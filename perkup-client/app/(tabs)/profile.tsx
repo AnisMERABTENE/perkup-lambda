@@ -12,10 +12,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppColors from '@/constants/Colors';
-import { getUserData, removeAuthToken, removeUserData } from '@/utils/storage';
+import { getUserData } from '@/utils/storage';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
+  
+  // 🎯 Utiliser le hook centralisé pour la déconnexion
+  const { logout } = useAuth();
 
   useEffect(() => {
     loadUserData();
@@ -40,13 +44,8 @@ export default function ProfileScreen() {
           text: 'Déconnexion',
           style: 'destructive',
           onPress: async () => {
-            try {
-              await removeAuthToken();
-              await removeUserData();
-              router.replace('/(auth)/login');
-            } catch (error) {
-              console.error('Erreur déconnexion:', error);
-            }
+            // ✅ Utiliser la fonction logout centralisée qui gère tout
+            await logout();
           },
         },
       ]

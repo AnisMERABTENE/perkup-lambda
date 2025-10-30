@@ -33,7 +33,8 @@ interface UsePartnersOptions {
   enableIntelligentCache?: boolean;
   preloadData?: boolean;
   limit?: number;
-  forceRefresh?: boolean; // NOUVEAU: forcer le refresh
+  forceRefresh?: boolean;
+  skipQueries?: boolean; // ✅ NOUVEAU: Skip toutes les requêtes
 }
 
 interface UsePartnersReturn {
@@ -63,15 +64,19 @@ interface UsePartnersReturn {
   // ✅ Infos cache intelligent
   isUsingSmartCache: boolean;
   smartCacheMetrics?: () => Promise<any>;
+  
+  // 🔐 Status authentification
+  isAuthenticated: boolean;
+  authLoading: boolean;
 }
 
 /**
  * 🎯 Hook centralisé pour gestion optimisée des partenaires
- * Profite du cache backend multi-couches + cache Apollo + cache intelligent global
- * 🔐 PROTECTION AUTHENTIFICATION INTÉGRÉE
+ * 🔐 PROTECTION AUTHENTIFICATION INTÉGRÉE - VERSION CORRIGÉE
+ * ✅ Ne lance AUCUNE requête si l'utilisateur n'est pas authentifié
  */
-export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn => {
-  // 🔐 Vérification authentification AVANT tout
+export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartnersReturn => {
+  // 🔐 VÉRIFICATION AUTHENTIFICATION AVANT TOUT
   const { isAuthenticated, isLoading: authLoading } = useAuthContext();
   
   const {
@@ -85,14 +90,20 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
     enableIntelligentCache = true,
     preloadData = true,
     limit = 50,
-    forceRefresh = false // Nouveau paramètre
+    forceRefresh = false,
+    skipQueries = false // ✅ NOUVEAU: Skip par défaut
   } = options;
   
-  // 🚫 Si pas authentifié, désactiver toutes les requêtes
-  const shouldSkipQueries = !isAuthenticated || authLoading;
+  // 🚫 PROTECTION CRITIQUE : Si pas authentifié OU pas focus, désactiver TOUTES les requêtes
+  const shouldSkipQueries = !isAuthenticated || authLoading || skipQueries;
+  
+  console.log('🔐 usePartnersProtected - Auth:', isAuthenticated, 'Loading:', authLoading, 'Skip:', shouldSkipQueries, 'Focus:', !skipQueries);
 
-  // 🔥 WEBSOCKET TEMPS RÉEL pour auto-refresh
-  const { connected: wsConnected, updates: partnerUpdates, hasNewUpdates } = usePartnerUpdates(city, category);
+  // 🔥 WEBSOCKET TEMPS RÉEL pour auto-refresh (seulement si authentifié ET focus)
+  const { connected: wsConnected, updates: partnerUpdates, hasNewUpdates } = usePartnerUpdates(
+    shouldSkipQueries ? undefined : city, 
+    shouldSkipQueries ? undefined : category
+  );
 
   // 📊 États locaux
   const [lastLocation, setLastLocation] = useState<{ lat?: number; lng?: number }>({});
@@ -104,7 +115,7 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
   // 🔍 Déterminer la stratégie de requête (liste vs recherche)
   const useSearchQuery = !!(lat && lng) || !!city || !!searchQuery;
 
-  // 📋 Requête liste partners (cache optimisé)
+  // 📋 Requête liste partners - 🔐 PROTÉGÉE
   const {
     data: partnersData,
     loading: loadingPartners,
@@ -112,94 +123,92 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
     refetch: refetchPartners
   } = useQuery<PartnersResponse>(GET_PARTNERS, {
     variables: { category: category || undefined },
-    skip: useSearchQuery || useSmartCache,
-    fetchPolicy: forceRefresh ? 'network-only' : (enableCache ? 'cache-and-network' : 'network-only'), // CHANGÉ pour avoir les données fraîches
+    skip: shouldSkipQueries || useSearchQuery || useSmartCache, // 🚫 PROTECTION CRITIQUE
+    fetchPolicy: forceRefresh ? 'network-only' : (enableCache ? 'cache-and-network' : 'network-only'),
     errorPolicy: 'all',
-    notifyOnNetworkStatusChange: true // Pour détecter les mises à jour
+    notifyOnNetworkStatusChange: true
   });
 
-  // 🔍 Recherche partners (géo + filtres)
+  // 🔍 Recherche partners - 🔐 PROTÉGÉE
   const [searchPartnersQuery, {
     data: searchData,
     loading: loadingSearch,
     error: errorSearch
   }] = useLazyQuery<SearchPartnersResponse>(SEARCH_PARTNERS, {
-    fetchPolicy: enableCache ? 'cache-and-network' : 'network-only', // CHANGÉ
+    fetchPolicy: enableCache ? 'cache-and-network' : 'network-only',
     errorPolicy: 'all',
     notifyOnNetworkStatusChange: true
   });
 
-  // 📂 Catégories (cache long + smart cache)
+  // 📂 Catégories - 🔐 PROTÉGÉE
   const {
     data: categoriesData,
     loading: loadingCategories
   } = useQuery<CategoriesResponse>(GET_CATEGORIES, {
-    skip: useSmartCache,
+    skip: shouldSkipQueries || useSmartCache, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
 
-  // 🏙️ Villes (cache long + smart cache)
+  // 🏙️ Villes - 🔐 PROTÉGÉE
   const {
     data: citiesData,
     loading: loadingCities
   } = useQuery<CitiesResponse>(GET_CITIES, {
-    skip: useSmartCache,
+    skip: shouldSkipQueries || useSmartCache, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
 
-  // 🎯 Smart Cache Logic avec invalidation périodique
+  // 🎯 Smart Cache Logic avec protection auth
   const loadDataWithSmartCache = useCallback(async (forceFresh = false) => {
-    if (!enableIntelligentCache) return;
+    // 🚫 PROTECTION: Pas de smart cache si pas authentifié
+    if (!enableIntelligentCache || shouldSkipQueries) {
+      console.log('🔐 Smart cache bloqué - pas authentifié');
+      return;
+    }
     
     try {
       setSmartLoading(true);
       
-      // Si forceFresh, invalider d'abord le cache
       if (forceFresh) {
         console.log('🔄 Invalidation forcée du cache intelligent');
         await smartApollo.invalidateQueries(['GetPartners', 'SearchPartners']);
       }
       
-      // Vérifier si le cache est trop vieux (plus de 2 minutes)
       const cacheAge = Date.now() - lastRefreshTime;
       const shouldRefresh = cacheAge > 120000; // 2 minutes
       
       let partnersResult;
       
       if (useSearchQuery) {
-        // Recherche avec filtres
         partnersResult = await smartApollo.smartQuery({
           query: SEARCH_PARTNERS,
           variables: { lat, lng, radius, category, city, name: searchQuery, limit },
           cacheConfig: { 
             type: 'segment', 
             customKey: `search:${lat}:${lng}:${radius}:${category}:${city}:${searchQuery}`,
-            ttl: shouldRefresh ? 1 : 10 * 60 * 1000, // TTL court si refresh nécessaire
+            ttl: shouldRefresh ? 1 : 10 * 60 * 1000,
             forceRefresh: shouldRefresh || forceFresh
           }
         });
       } else {
-        // Liste standard avec refresh si nécessaire
         partnersResult = await smartApollo.smartQuery({
           query: GET_PARTNERS,
           variables: { category },
           cacheConfig: { 
             type: 'global',
             customKey: category ? `query:GetPartners:${Buffer.from(JSON.stringify({category})).toString('base64').slice(0, 10)}` : 'query:GetPartners:no_vars',
-            ttl: shouldRefresh ? 1 : 30 * 60 * 1000, // TTL court si refresh nécessaire
+            ttl: shouldRefresh ? 1 : 30 * 60 * 1000,
             forceRefresh: shouldRefresh || forceFresh
           }
         });
       }
       
-      // Mettre à jour le temps du dernier refresh si on a récupéré des données fraîches
       if (shouldRefresh || forceFresh) {
         setLastRefreshTime(Date.now());
       }
       
-      // 📊 Construire données finales depuis Partners
       const finalSmartData = {
         partners: partnersResult,
         categories: partnersResult?.getPartners?.availableCategories || [],
@@ -210,23 +219,24 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
       
     } catch (error) {
       console.error('❌ Erreur smart cache:', error);
-      // Fallback sur Apollo classique
       setUseSmartCache(false);
     } finally {
       setSmartLoading(false);
     }
-  }, [enableIntelligentCache, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit, lastRefreshTime]);
+  }, [enableIntelligentCache, shouldSkipQueries, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit]);
+  // ✅ CORRECTION: Retiré lastRefreshTime des deps pour stabiliser la fonction
 
-  // 🎯 Précharger données critiques au premier rendu
+  // 🎯 Précharger données critiques - 🔐 PROTÉGÉ
   useEffect(() => {
-    if (preloadData) {
+    if (preloadData && isAuthenticated && !authLoading) {
+      console.log('🎯 Préchargement données critiques (authentifié)');
       preloadCriticalData();
     }
-  }, [preloadData]);
+  }, [preloadData, isAuthenticated, authLoading]);
 
-  // 📍 Détecter changement de localisation et invalider cache
+  // 📍 Détecter changement de localisation - 🔐 PROTÉGÉ
   useEffect(() => {
-    if (lat && lng) {
+    if (lat && lng && isAuthenticated) {
       const hasLocationChanged = 
         lastLocation.lat !== lat || lastLocation.lng !== lng;
       
@@ -237,54 +247,51 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
       
       setLastLocation({ lat, lng });
     }
-  }, [lat, lng, lastLocation]);
+  }, [lat, lng, lastLocation, isAuthenticated]);
 
-  // 🎯 Smart Cache Logic - Déclenchement automatique SANS polling (WebSocket à la place)
+  // 🎯 Smart Cache Logic - Déclenchement automatique PROTÉGÉ
   useEffect(() => {
-    if (enableIntelligentCache) {
+    if (enableIntelligentCache && isAuthenticated && !authLoading) {
       loadDataWithSmartCache(forceRefresh);
     }
-  }, [loadDataWithSmartCache, enableIntelligentCache, forceRefresh]);
+  }, [enableIntelligentCache, forceRefresh, isAuthenticated, authLoading]);
+  // ✅ CORRECTION: Retiré loadDataWithSmartCache des deps pour éviter la boucle infinie
   
-  // 🚀 AUTO-REFRESH via WebSocket avec PROTECTION ANTI-BOUCLE
+  // 🚀 AUTO-REFRESH via WebSocket PROTÉGÉ
   const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
   
   useEffect(() => {
-    if (hasNewUpdates && wsConnected && !isProcessingUpdate) {
+    if (hasNewUpdates && wsConnected && !isProcessingUpdate && isAuthenticated) {
       console.log('🔔 Nouvelles données reçues via WebSocket, refresh auto');
       
-      // PROTECTION: Empêcher les appels multiples
       setIsProcessingUpdate(true);
       
-      // Debounce pour éviter les appels rapides successifs
       const timer = setTimeout(async () => {
         try {
-          // Invalider cache et recharger
           clearCache();
           
-          // Refetch avec nouvelles données
           if (enableIntelligentCache) {
-            await loadDataWithSmartCache(true); // Force refresh
+            await loadDataWithSmartCache(true);
           } else {
             await refetch();
           }
         } catch (error) {
           console.error('❌ Erreur refresh WebSocket:', error);
         } finally {
-          // Libérer le flag après 2 secondes pour permettre les prochaines mises à jour
           setTimeout(() => {
             setIsProcessingUpdate(false);
           }, 2000);
         }
-      }, 500); // Debounce de 500ms
+      }, 500);
       
       return () => clearTimeout(timer);
     }
-  }, [hasNewUpdates, wsConnected, enableIntelligentCache, isProcessingUpdate]); // Ajouter isProcessingUpdate aux deps
+  }, [hasNewUpdates, wsConnected, enableIntelligentCache, isProcessingUpdate, isAuthenticated]);
+  // ✅ CORRECTION: loadDataWithSmartCache et refetch sont stables grâce à useCallback
 
-  // 🔍 Exécuter recherche automatique selon les filtres
+  // 🔍 Exécuter recherche automatique - 🔐 PROTÉGÉ
   useEffect(() => {
-    if (useSearchQuery && !useSmartCache) {
+    if (useSearchQuery && !useSmartCache && isAuthenticated && !authLoading) {
       searchPartnersQuery({
         variables: {
           lat,
@@ -297,10 +304,23 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
         }
       });
     }
-  }, [lat, lng, radius, category, city, searchQuery, limit, useSearchQuery, useSmartCache, searchPartnersQuery]);
+  }, [lat, lng, radius, category, city, searchQuery, limit, useSearchQuery, useSmartCache, isAuthenticated, authLoading]);
+  // ✅ CORRECTION BOUCLE: Retiré searchPartnersQuery des deps pour éviter la boucle infinie
 
   // 🎯 Calculer les données finales selon la stratégie
   const finalData = useMemo(() => {
+    // 🚫 Si pas authentifié, retourner des données vides
+    if (!isAuthenticated) {
+      return {
+        partners: [],
+        userPlan: 'free',
+        totalFound: 0,
+        isGeoSearch: false,
+        categories: [],
+        cities: []
+      };
+    }
+
     // ✅ Priorité Smart Cache si activé et données disponibles
     if (useSmartCache && smartData) {
       const partnersResponse = useSearchQuery ? smartData.partners?.searchPartners : smartData.partners?.getPartners;
@@ -335,19 +355,23 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
         cities: citiesData?.getCities?.cities || []
       };
     }
-  }, [useSmartCache, smartData, useSearchQuery, searchData, partnersData, categoriesData, citiesData]);
+  }, [isAuthenticated, useSmartCache, smartData, useSearchQuery, searchData, partnersData, categoriesData, citiesData]);
+  // ✅ CORRECTION: useMemo optimisé pour éviter les recalculs inutiles
 
-  // 🔄 Fonction refresh centralisée avec smart cache
+  // 🔄 Fonction refresh centralisée - 🔐 PROTÉGÉE
   const refetch = useCallback(async () => {
+    if (!isAuthenticated) {
+      console.log('🔐 Refresh bloqué - pas authentifié');
+      return;
+    }
+
     try {
       console.log('🔄 Refresh manuel déclenché');
       
       if (useSmartCache) {
-        // ✅ Smart cache: invalider et recharger avec force
         await smartApollo.invalidateQueries(['GetPartners', 'SearchPartners']);
-        await loadDataWithSmartCache(true); // Forcer le refresh
+        await loadDataWithSmartCache(true);
       } else {
-        // 🔄 Apollo classique
         if (useSearchQuery) {
           await searchPartnersQuery({
             variables: {
@@ -359,25 +383,30 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
               name: searchQuery || undefined,
               limit
             },
-            fetchPolicy: 'network-only' // Forcer réseau
+            fetchPolicy: 'network-only'
           });
         } else {
           await refetchPartners({
-            fetchPolicy: 'network-only' // Forcer réseau
+            fetchPolicy: 'network-only'
           });
         }
       }
       
-      // Mettre à jour le temps du dernier refresh
       setLastRefreshTime(Date.now());
       
     } catch (error) {
       console.error('❌ Erreur refresh partners:', error);
     }
-  }, [useSmartCache, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit, loadDataWithSmartCache, searchPartnersQuery, refetchPartners]);
+  }, [isAuthenticated, useSmartCache, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit]);
+  // ✅ CORRECTION: Retiré loadDataWithSmartCache, searchPartnersQuery, refetchPartners des deps
 
-  // 🔍 Fonction recherche manuelle
+  // 🔍 Fonction recherche manuelle - 🔐 PROTÉGÉE
   const searchPartners = useCallback(async (filters: UsePartnersOptions) => {
+    if (!isAuthenticated) {
+      console.log('🔐 Recherche bloquée - pas authentifié');
+      return;
+    }
+
     try {
       await searchPartnersQuery({
         variables: {
@@ -389,26 +418,23 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
           name: filters.searchQuery || undefined,
           limit: filters.limit || 50
         },
-        fetchPolicy: 'network-only' // Toujours aller chercher sur le réseau
+        fetchPolicy: 'network-only'
       });
     } catch (error) {
       console.error('❌ Erreur recherche partners:', error);
     }
-  }, [searchPartnersQuery]);
+  }, [isAuthenticated]);
+  // ✅ CORRECTION: Retiré searchPartnersQuery des deps pour stabiliser la fonction
 
-  // 🧹 Fonction clear cache centralisée avec smart cache
+  // 🧹 Fonction clear cache centralisée
   const clearCache = useCallback(() => {
     console.log('🧹 Nettoyage complet du cache');
     
     if (useSmartCache) {
-      // ✅ Smart cache: nettoyage intelligent
       smartApollo.invalidateQueries(['GetPartners', 'SearchPartners']);
     }
     
-    // 🔄 Apollo classique aussi
     clearPartnersCache();
-    
-    // Réinitialiser le temps du dernier refresh
     setLastRefreshTime(0);
   }, [useSmartCache]);
 
@@ -419,13 +445,13 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
     cities: finalData.cities,
     userPlan: finalData.userPlan,
     
-    // États de chargement (combine smart + apollo)
-    loading: smartLoading || loadingPartners || loadingSearch,
-    loadingCategories: smartLoading || loadingCategories,
-    loadingCities: smartLoading || loadingCities,
+    // États de chargement (ne montre loading que si authentifié)
+    loading: isAuthenticated ? (smartLoading || loadingPartners || loadingSearch) : false,
+    loadingCategories: isAuthenticated ? (smartLoading || loadingCategories) : false,
+    loadingCities: isAuthenticated ? (smartLoading || loadingCities) : false,
     
-    // Erreurs
-    error: errorPartners || errorSearch,
+    // Erreurs (seulement si authentifié)
+    error: isAuthenticated ? (errorPartners || errorSearch) : null,
     
     // Actions
     refetch,
@@ -438,34 +464,40 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
     
     // ✅ Infos cache intelligent
     isUsingSmartCache: useSmartCache,
-    smartCacheMetrics: useSmartCache ? smartApollo.getMetrics : undefined
+    smartCacheMetrics: useSmartCache ? smartApollo.getMetrics : undefined,
+    
+    // 🔐 Status authentification
+    isAuthenticated,
+    authLoading
   };
 };
 
 /**
- * 🎯 Hook simplifié pour liste basic de partners
+ * 🎯 Hook simplifié pour liste basic de partners - PROTÉGÉ
  */
-export const usePartnersList = (category?: string) => {
-  return usePartners({
+export const usePartnersListProtected = (category?: string, skipQueries?: boolean) => {
+  return usePartnersProtected({
     category,
-    enableCache: false, // DÉSACTIVÉ pour toujours avoir les données fraîches
+    enableCache: false,
     preloadData: true,
-    forceRefresh: true // Forcer le refresh
+    forceRefresh: true,
+    skipQueries // ✅ Passer le paramètre skip
   });
 };
 
 /**
- * 🎯 Hook simplifié pour recherche géolocalisée
+ * 🎯 Hook simplifié pour recherche géolocalisée - PROTÉGÉ
  */
-export const usePartnersSearch = (lat?: number, lng?: number, radius?: number) => {
-  return usePartners({
+export const usePartnersSearchProtected = (lat?: number, lng?: number, radius?: number, skipQueries?: boolean) => {
+  return usePartnersProtected({
     lat,
     lng,
     radius,
-    enableCache: false, // DÉSACTIVÉ pour toujours avoir les données fraîches
+    enableCache: false,
     preloadData: false,
-    forceRefresh: true // Forcer le refresh
+    forceRefresh: true,
+    skipQueries // ✅ Passer le paramètre skip
   });
 };
 
-export default usePartners;
+export default usePartnersProtected;
