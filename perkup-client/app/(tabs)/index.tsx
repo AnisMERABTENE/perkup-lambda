@@ -19,11 +19,26 @@ import AppColors from '@/constants/Colors';
 import { getUserData } from '@/utils/storage';
 import { usePartnersProtected } from '@/hooks/usePartnersProtected';
 import { Partner } from '@/graphql/queries/partners';
+import { PartnerFilters } from '@/components/PartnerFilters';
+import { buildCityGroupsFromList } from '@/utils/cityGroups';
+
+const formatCategoryLabel = (value: string) =>
+  value
+    ? value
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    : '';
 
 export default function PartnersScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCityGroupKey, setSelectedCityGroupKey] = useState<string | null>(null);
   
   // 🎯 OPTIMISATION: Désactiver le hook si la page n'est pas focus
   const isFocused = useIsFocused();
@@ -34,6 +49,8 @@ export default function PartnersScreen() {
     cities,
     userPlan,
     loading: loadingPartners,
+    loadingCategories,
+    loadingCities,
     error: errorPartners,
     refetch: refetchPartners,
     totalFound,
@@ -62,6 +79,44 @@ export default function PartnersScreen() {
     }
   };
 
+  const categoryOptions = useMemo(() => {
+    if (categories && categories.length > 0) {
+      return categories;
+    }
+
+    const unique = Array.from(
+      new Set(
+        partners
+          .map((partner) => partner.category)
+          .filter((category): category is string => Boolean(category))
+      )
+    );
+
+    return unique.map((value) => ({
+      value,
+      label: formatCategoryLabel(value)
+    }));
+  }, [categories, partners]);
+
+  const cityGroupOptions = useMemo(() => {
+    const source =
+      cities && cities.length > 0
+        ? cities
+        : partners
+            .map((partner) => partner.city)
+            .filter((city): city is string => Boolean(city));
+
+    return buildCityGroupsFromList(source);
+  }, [cities, partners]);
+
+  const selectedCityGroup = useMemo(
+    () =>
+      selectedCityGroupKey
+        ? cityGroupOptions.find((group) => group.key === selectedCityGroupKey)
+        : null,
+    [cityGroupOptions, selectedCityGroupKey]
+  );
+
   const getCategoryIcon = (category: string) => {
     const icons: { [key: string]: string } = {
       'restaurant': 'restaurant',
@@ -87,9 +142,16 @@ export default function PartnersScreen() {
       const matchesSearch = !searchQuery || 
         partner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         partner.category.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
+      const matchesCategory = !selectedCategory || partner.category.toLowerCase() === selectedCategory.toLowerCase();
+      const matchesCityGroup =
+        !selectedCityGroup || !partner.city
+          ? true
+          : selectedCityGroup.cities
+              .map((city) => city.toLowerCase())
+              .includes(partner.city.toLowerCase());
+      return matchesSearch && matchesCategory && matchesCityGroup;
     });
-  }, [partners, searchQuery]);
+  }, [partners, searchQuery, selectedCategory, selectedCityGroup]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -241,6 +303,24 @@ export default function PartnersScreen() {
 
   return (
     <View style={styles.container}>
+      <PartnerFilters
+        visible={filterModalVisible}
+        categories={categoryOptions}
+        cityGroups={cityGroupOptions}
+        selectedCategory={selectedCategory}
+        selectedCityGroupKey={selectedCityGroupKey}
+        isLoading={loadingCategories || loadingCities}
+        onApply={({ category, cityGroupKey }) => {
+          setSelectedCategory(category);
+          setSelectedCityGroupKey(cityGroupKey);
+        }}
+        onClear={() => {
+          setSelectedCategory(null);
+          setSelectedCityGroupKey(null);
+        }}
+        onClose={() => setFilterModalVisible(false)}
+      />
+
       <LinearGradient colors={AppColors.gradientPrimary} style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.greetingSection}>
@@ -263,7 +343,10 @@ export default function PartnersScreen() {
               />
             </View>
             
-            <TouchableOpacity style={styles.filterButton}>
+            <TouchableOpacity
+              style={styles.filterButton}
+              onPress={() => setFilterModalVisible(true)}
+            >
               <Ionicons name="options" size={20} color={AppColors.textInverse} />
               <Text style={styles.filterButtonText}>Filtres</Text>
             </TouchableOpacity>

@@ -70,6 +70,51 @@ interface UsePartnersReturn {
   authLoading: boolean;
 }
 
+const formatCategoryLabel = (value: string) => {
+  if (!value) return '';
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const normalizeCategoryList = (
+  input: Array<{ value: string; label?: string }> | string[] | undefined
+): Array<{ value: string; label: string }> => {
+  if (!input) return [];
+  
+  const normalized: Array<{ value: string; label: string }> = [];
+  const seen = new Set<string>();
+  
+  input.forEach((item) => {
+    const value = typeof item === 'string' ? item : item.value;
+    if (!value || seen.has(value)) return;
+    
+    const label =
+      typeof item === 'string'
+        ? formatCategoryLabel(value)
+        : item.label || formatCategoryLabel(value);
+    
+    seen.add(value);
+    normalized.push({ value, label });
+  });
+  
+  return normalized;
+};
+
+const extractCitiesFromPartners = (list: Partner[] | undefined): string[] => {
+  if (!list) return [];
+  const unique = new Set<string>();
+  list.forEach((partner) => {
+    if (partner?.city) {
+      unique.add(partner.city);
+    }
+  });
+  return Array.from(unique);
+};
+
 /**
  * 🎯 Hook centralisé pour gestion optimisée des partenaires
  * 🔐 PROTECTION AUTHENTIFICATION INTÉGRÉE - VERSION CORRIGÉE
@@ -145,7 +190,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     data: categoriesData,
     loading: loadingCategories
   } = useQuery<CategoriesResponse>(GET_CATEGORIES, {
-    skip: shouldSkipQueries || useSmartCache, // 🚫 PROTECTION CRITIQUE
+    skip: shouldSkipQueries, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
@@ -155,7 +200,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     data: citiesData,
     loading: loadingCities
   } = useQuery<CitiesResponse>(GET_CITIES, {
-    skip: shouldSkipQueries || useSmartCache, // 🚫 PROTECTION CRITIQUE
+    skip: shouldSkipQueries, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
@@ -209,10 +254,22 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
         setLastRefreshTime(Date.now());
       }
       
+      const partnersResponse = useSearchQuery
+        ? partnersResult?.searchPartners
+        : partnersResult?.getPartners;
+
+      const partnerList: Partner[] = partnersResponse?.partners || [];
+
+      const categoriesFromResponse =
+        (partnersResponse?.availableCategories as string[] | undefined) ||
+        partnerList
+          .map((partner) => partner?.category)
+          .filter((category): category is string => Boolean(category));
+
       const finalSmartData = {
         partners: partnersResult,
-        categories: partnersResult?.getPartners?.availableCategories || [],
-        cities: []
+        categories: normalizeCategoryList(categoriesFromResponse),
+        cities: extractCitiesFromPartners(partnerList)
       };
       
       setSmartData(finalSmartData);
@@ -330,7 +387,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
         userPlan: partnersResponse?.userPlan || 'free',
         totalFound: partnersResponse?.totalFound || partnersResponse?.totalPartners || 0,
         isGeoSearch: partnersResponse?.isGeoSearch || false,
-        categories: smartData.categories || [],
+        categories: normalizeCategoryList(smartData.categories),
         cities: smartData.cities || []
       };
     }
@@ -342,8 +399,8 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
         userPlan: searchData?.searchPartners?.userPlan || 'free',
         totalFound: searchData?.searchPartners?.totalFound || 0,
         isGeoSearch: searchData?.searchPartners?.isGeoSearch || false,
-        categories: categoriesData?.getCategories?.categories || [],
-        cities: citiesData?.getCities?.cities || []
+        categories: normalizeCategoryList(categoriesData?.getCategories?.categories),
+        cities: (citiesData?.getCities?.cities || []).filter(Boolean)
       };
     } else {
       return {
@@ -351,8 +408,8 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
         userPlan: partnersData?.getPartners?.userPlan || 'free',
         totalFound: partnersData?.getPartners?.totalPartners || 0,
         isGeoSearch: false,
-        categories: categoriesData?.getCategories?.categories || [],
-        cities: citiesData?.getCities?.cities || []
+        categories: normalizeCategoryList(categoriesData?.getCategories?.categories),
+        cities: (citiesData?.getCities?.cities || []).filter(Boolean)
       };
     }
   }, [isAuthenticated, useSmartCache, smartData, useSearchQuery, searchData, partnersData, categoriesData, citiesData]);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,6 +15,18 @@ import * as Location from 'expo-location';
 import { usePartnersProtected } from '@/hooks/usePartnersProtected';
 import AppColors from '@/constants/Colors';
 import { generateLeafletHTML } from '@/utils/leafletHTML';
+import { PartnerFilters } from '@/components/PartnerFilters';
+import { buildCityGroupsFromList } from '@/utils/cityGroups';
+
+const formatCategoryLabel = (value: string) =>
+  value
+    ? value
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    : '';
 
 interface StoreMarker {
   id: string;
@@ -32,6 +44,9 @@ export default function MapsScreen() {
   const [stores, setStores] = useState<StoreMarker[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCityGroupKey, setSelectedCityGroupKey] = useState<string | null>(null);
   
   // 🎯 OPTIMISATION: Désactiver le hook si la page n'est pas focus
   const isFocused = useIsFocused();
@@ -39,7 +54,11 @@ export default function MapsScreen() {
   // 📍 RÉCUPÉRER LES PARTENAIRES AVEC PROTECTION AUTH + FOCUS
   const { 
     partners,
+    categories,
+    cities,
     loading, 
+    loadingCategories,
+    loadingCities,
     error, 
     refetch,
     isAuthenticated,
@@ -59,6 +78,61 @@ export default function MapsScreen() {
     }
   }, [error]);
 
+  const categoryOptions = useMemo(() => {
+    if (categories && categories.length > 0) {
+      return categories;
+    }
+
+    const unique = Array.from(
+      new Set(
+        partners
+          .map((partner) => partner.category)
+          .filter((category): category is string => Boolean(category))
+      )
+    );
+
+    return unique.map((value) => ({
+      value,
+      label: formatCategoryLabel(value)
+    }));
+  }, [categories, partners]);
+
+  const cityGroupOptions = useMemo(() => {
+    const source =
+      cities && cities.length > 0
+        ? cities
+        : partners
+            .map((partner) => partner.city)
+            .filter((city): city is string => Boolean(city));
+
+    return buildCityGroupsFromList(source);
+  }, [cities, partners]);
+
+  const selectedCityGroup = useMemo(
+    () =>
+      selectedCityGroupKey
+        ? cityGroupOptions.find((group) => group.key === selectedCityGroupKey)
+        : null,
+    [cityGroupOptions, selectedCityGroupKey]
+  );
+
+  const filteredPartners = useMemo(() => {
+    return partners.filter((partner) => {
+      const matchesCategory = !selectedCategory
+        ? true
+        : partner.category?.toLowerCase() === selectedCategory.toLowerCase();
+
+      const matchesCityGroup =
+        !selectedCityGroup || !partner.city
+          ? true
+          : selectedCityGroup.cities
+              .map((city) => city.toLowerCase())
+              .includes(partner.city.toLowerCase());
+
+      return matchesCategory && matchesCityGroup;
+    });
+  }, [partners, selectedCategory, selectedCityGroup]);
+
   // 📍 Récupérer la position utilisateur AU DÉMARRAGE
   useEffect(() => {
     getUserLocation();
@@ -66,12 +140,10 @@ export default function MapsScreen() {
 
   // 🗺️ Traiter les données des partenaires
   useEffect(() => {
-    if (partners && partners.length > 0) {
-      console.log(`📊 Total partenaires reçus: ${partners.length}`);
-      
+    if (filteredPartners && filteredPartners.length > 0) {
       const partnersMarkers: StoreMarker[] = [];
       
-      partners.forEach((partner: any, index: number) => {
+      filteredPartners.forEach((partner: any, index: number) => {
         // UTILISER LES VRAIES COORDONNÉES GPS
         if (partner.location && partner.location.latitude && partner.location.longitude) {
           partnersMarkers.push({
@@ -83,13 +155,9 @@ export default function MapsScreen() {
             latitude: partner.location.latitude,
             longitude: partner.location.longitude,
           });
-          console.log(`✅ ${partner.name}: GPS (${partner.location.latitude}, ${partner.location.longitude})`);
-        } else {
-          console.log(`❌ ${partner.name}: Pas de coordonnées GPS`);
         }
       });
       
-      console.log(`🏪 Total marqueurs avec GPS: ${partnersMarkers.length}`);
       setStores(partnersMarkers);
       
       // Envoyer à la carte
@@ -100,8 +168,17 @@ export default function MapsScreen() {
         `;
         webViewRef.current.postMessage(jsCode);
       }
+    } else {
+      setStores([]);
+      if (mapReady && webViewRef.current) {
+        const jsCode = `
+          window.addStoreMarkers([]);
+          true;
+        `;
+        webViewRef.current.postMessage(jsCode);
+      }
     }
-  }, [partners, mapReady]);
+  }, [filteredPartners, mapReady]);
 
   // 📍 RÉCUPÉRER POSITION UTILISATEUR (NATIF, CÔTÉ FRONT UNIQUEMENT)
   const getUserLocation = async () => {
@@ -129,7 +206,6 @@ export default function MapsScreen() {
         longitude: location.coords.longitude,
       };
 
-      console.log('📍 Ma position:', coords);
       setUserLocation(coords);
 
       // Centrer la carte sur ma position
@@ -168,7 +244,6 @@ export default function MapsScreen() {
       const message = JSON.parse(event.nativeEvent.data);
       
       if (message.type === 'mapReady') {
-        console.log('✅ Carte prête');
         setMapReady(true);
         
         // Envoyer position utilisateur si disponible
@@ -180,14 +255,11 @@ export default function MapsScreen() {
           webViewRef.current?.postMessage(jsCode);
         }
         
-        // Envoyer marqueurs si disponibles
-        if (stores.length > 0) {
-          const jsCode = `
-            window.addStoreMarkers(${JSON.stringify(stores)});
-            true;
-          `;
-          webViewRef.current?.postMessage(jsCode);
-        }
+        const jsCode = `
+          window.addStoreMarkers(${JSON.stringify(stores)});
+          true;
+        `;
+        webViewRef.current?.postMessage(jsCode);
       } else if (message.type === 'markerClick') {
         Alert.alert(
           message.data.name,
@@ -235,15 +307,44 @@ export default function MapsScreen() {
 
   return (
     <View style={styles.container}>
+      <PartnerFilters
+        visible={filterModalVisible}
+        categories={categoryOptions}
+        cityGroups={cityGroupOptions}
+        selectedCategory={selectedCategory}
+        selectedCityGroupKey={selectedCityGroupKey}
+        isLoading={loadingCategories || loadingCities}
+        onApply={({ category, cityGroupKey }) => {
+          setSelectedCategory(category);
+          setSelectedCityGroupKey(cityGroupKey);
+        }}
+        onClear={() => {
+          setSelectedCategory(null);
+          setSelectedCityGroupKey(null);
+        }}
+        onClose={() => setFilterModalVisible(false)}
+      />
+
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Carte des partenaires</Text>
-        <Text style={styles.headerSubtitle}>
-          {stores.length > 0 
-            ? `${stores.length} partenaires localisés`
-            : 'Chargement...'
-          }
-        </Text>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Carte des partenaires</Text>
+          <Text style={styles.headerSubtitle}>
+            {stores.length > 0 
+              ? `${stores.length} partenaires localisés`
+              : filteredPartners.length === 0
+                ? 'Aucun partenaire pour ces filtres'
+                : 'Chargement...'
+            }
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.headerFilterButton}
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Ionicons name="options" size={20} color={AppColors.textInverse} />
+          <Text style={styles.headerFilterButtonText}>Filtres</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Carte WebView */}
@@ -281,7 +382,7 @@ export default function MapsScreen() {
 
       {/* Bouton Rafraîchir */}
       <TouchableOpacity 
-        style={styles.filterButton}
+        style={styles.refreshButton}
         onPress={() => refetch()}
       >
         <Ionicons name="refresh-outline" size={24} color={AppColors.white} />
@@ -307,6 +408,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerTextContainer: {
+    flexShrink: 1,
   },
   headerTitle: {
     fontSize: 24,
@@ -359,7 +467,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  filterButton: {
+  refreshButton: {
     position: 'absolute',
     bottom: 170,
     right: 20,
@@ -374,5 +482,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  headerFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+    shadowColor: AppColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  headerFilterButtonText: {
+    color: AppColors.textInverse,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
