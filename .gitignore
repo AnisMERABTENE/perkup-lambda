@@ -2,9 +2,19 @@
 **/node_modules/
 **/dist/
 **/build/
+**/coverage/
 **/.env
 **/.env.*
 **/.DS_Store
+**/tmp/
+**/.cache/
+
+# Frameworks
+**/.next/
+**/.nuxt/
+**/.vercel/
+**/.turbo/
+**/.vite/
 
 # Logs
 npm-debug.log*
@@ -12,8 +22,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Tests
-**/coverage/
-
-# OS
-Thumbs.db
+# Serverless & artefacts sensibles
+backend/.serverless/
+serverless/output/
+.secret/
+.secrets/
