@@ -27,3 +27,4 @@ backend/.serverless/
 serverless/output/
 .secret/
 .secrets/
+.serverless/
