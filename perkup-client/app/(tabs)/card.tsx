@@ -1,20 +1,69 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { 
+  View, 
+  ScrollView, 
+  StyleSheet, 
+  SafeAreaView, 
+  StatusBar,
+  Alert
+} from 'react-native';
+import { router } from 'expo-router';
 import AppColors from '@/constants/Colors';
+import DigitalCard from '@/components/DigitalCard';
+import DiscountHistory from '@/components/DiscountHistory';
 
 export default function CardScreen() {
+  /**
+   * Naviguer vers la page des abonnements
+   * TODO: Remplacer par la vraie navigation quand la page sera créée
+   */
+  const handleSubscriptionPress = () => {
+    Alert.alert(
+      'Abonnements PerkUP',
+      'Choisissez votre plan pour commencer à économiser !',
+      [
+        {
+          text: 'Plus tard',
+          style: 'cancel',
+        },
+        {
+          text: 'Voir les plans',
+          style: 'default',
+          onPress: () => {
+            // TODO: Remplacer par la navigation vers la page des abonnements
+            // router.push('/subscription/plans');
+            console.log('🚀 Navigation vers abonnements à implémenter');
+            
+            // Pour l'instant, afficher une alerte avec les plans
+            Alert.alert(
+              'Plans disponibles',
+              '• Basic (Gratuit) - 5% de réduction\n• Super (9,99€/mois) - 10% de réduction\n• Premium (19,99€/mois) - Jusqu\'à 100% de réduction',
+              [{ text: 'OK', style: 'default' }]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <Ionicons name="card" size={64} color={AppColors.textLight} />
-        <Text style={styles.title}>Ma Carte PerkUP</Text>
-        <Text style={styles.subtitle}>
-          Votre carte de fidélité digitale
-        </Text>
-        <Text style={styles.comingSoon}>Bientôt disponible</Text>
-      </View>
-    </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={AppColors.background} />
+      
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 💳 Carte digitale principale */}
+        <DigitalCard 
+          onSubscriptionPress={handleSubscriptionPress}
+        />
+
+        {/* 📊 Historique des réductions */}
+        <DiscountHistory maxItems={5} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -23,26 +72,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.background,
   },
-  content: {
+  
+  scrollView: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    gap: 16,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: AppColors.text,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: AppColors.textSecondary,
-    textAlign: 'center',
-  },
-  comingSoon: {
-    fontSize: 14,
-    color: AppColors.primary,
-    fontWeight: '600',
+  
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
 });
