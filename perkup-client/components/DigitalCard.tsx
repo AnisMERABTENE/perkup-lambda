@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import QRCode from 'react-native-qrcode-svg';
 import AppColors from '@/constants/Colors';
 import useDigitalCard from '@/hooks/useDigitalCard';
 import {
@@ -37,18 +38,111 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
   const {
     subscriptionStatus,
     cardData,
-    timeRemaining,
     loading,
     toggleLoading,
     error,
     toggleCard,
     refreshAll,
+    refetchCard,
   } = useDigitalCard();
 
   // 🎬 Animations
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const scaleAnimation = useRef(new Animated.Value(1)).current;
   const [showQR, setShowQR] = useState(false);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [qrTimeLeft, setQrTimeLeft] = useState<number | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef(false);
+
+  const normalizedInitialDuration = useCallback(() => {
+    const backendDuration = cardData?.card?.timeUntilRotation;
+    if (typeof backendDuration === 'number' && backendDuration > 0) {
+      return backendDuration;
+    }
+    return 60;
+  }, [cardData]);
+
+  const stopTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsTimerRunning(false);
+  }, []);
+
+  const refreshQrCode = useCallback(async () => {
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
+    try {
+      await refetchCard();
+    } catch (refreshError) {
+      console.error('❌ Erreur refresh QR:', refreshError);
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, [refetchCard]);
+
+  const startTimer = useCallback(() => {
+    if (isTimerRunning) return;
+    const initial = qrTimeLeft ?? normalizedInitialDuration();
+    setQrTimeLeft(initial);
+    setIsTimerRunning(true);
+  }, [isTimerRunning, qrTimeLeft, normalizedInitialDuration]);
+
+  useEffect(() => {
+    if (!isTimerRunning) {
+      return;
+    }
+
+    if (intervalRef.current) {
+      return;
+    }
+
+    intervalRef.current = setInterval(() => {
+      setQrTimeLeft(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          refreshQrCode();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isTimerRunning, refreshQrCode]);
+
+  useEffect(() => {
+    if (!isTimerRunning) return;
+    const nextDuration = normalizedInitialDuration();
+    setQrTimeLeft(nextDuration);
+  }, [
+    isTimerRunning,
+    normalizedInitialDuration,
+    cardData?.card?.qrCode,
+    cardData?.card?.qrCodeData,
+    cardData?.card?.timeUntilRotation
+  ]);
+
+  useEffect(() => {
+    if (!subscriptionStatus?.isActive) {
+      stopTimer();
+      setShowQR(false);
+      setQrTimeLeft(null);
+    }
+  }, [subscriptionStatus?.isActive, stopTimer]);
+
+  useEffect(() => {
+    return () => {
+      stopTimer();
+    };
+  }, [stopTimer]);
 
   // 🎯 Gestion du clic sur la carte
   const handleCardPress = async () => {
@@ -92,7 +186,11 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
       useNativeDriver: true,
     }).start();
 
-    setShowQR(!showQR);
+    if (!showQR && subscriptionStatus?.isActive) {
+      startTimer();
+    }
+
+    setShowQR(prev => !prev);
   };
 
   // 🎨 Calcul des interpolations d'animation
@@ -221,24 +319,37 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
               { transform: [{ rotateY: backInterpolate }] },
             ]}
           >
-            {subscriptionStatus?.isActive && cardData?.card?.qrCode ? (
+            {subscriptionStatus?.isActive && (cardData?.card?.qrCodeData || cardData?.card?.qrCode) ? (
               /* QR Code actif */
               <View style={styles.qrContainer}>
                 <Text style={styles.qrTitle}>Votre Code de Réduction</Text>
                 
                 <View style={styles.qrImageContainer}>
-                  <Image 
-                    source={{ uri: cardData.card.qrCode }} 
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
+                  {cardData.card.qrCodeData ? (
+                    <QRCode
+                      value={cardData.card.qrCodeData}
+                      size={200}
+                      backgroundColor="transparent"
+                      color={AppColors.text}
+                    />
+                  ) : cardData.card.qrCode ? (
+                    <Image 
+                      source={{ uri: cardData.card.qrCode }} 
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={styles.qrFallback}>
+                      <Ionicons name="qr-code-outline" size={48} color={AppColors.textSecondary} />
+                    </View>
+                  )}
                 </View>
 
                 {/* Countdown */}
                 <View style={styles.countdownContainer}>
                   <Ionicons name="time" size={16} color={AppColors.textLight} />
                   <Text style={styles.countdownText}>
-                    Nouveau code dans {timeRemaining}s
+                    Nouveau code dans {Math.max(0, qrTimeLeft ?? normalizedInitialDuration())}s
                   </Text>
                 </View>
 
@@ -283,7 +394,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
           <View style={styles.infoItem}>
             <Ionicons name="shield-checkmark" size={20} color={AppColors.success} />
             <Text style={styles.infoText}>
-              Code sécurisé qui change toutes les 30 secondes
+              Code sécurisé qui change toutes les 60 secondes
             </Text>
           </View>
           
@@ -530,6 +641,17 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 12,
+  },
+
+  qrFallback: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: AppColors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.surfaceSecondary,
   },
 
   countdownContainer: {

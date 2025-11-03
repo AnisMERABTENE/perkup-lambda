@@ -22,7 +22,6 @@ interface UseDigitalCardReturn {
   subscriptionStatus: SubscriptionStatusResponse['getSubscriptionStatus'] | null;
   cardData: DigitalCardResponse['getMyDigitalCard'] | null;
   cardUsage: CardUsageResponse['getCardUsageHistory'] | null;
-  timeRemaining: number;
   
   // États de chargement
   loading: boolean;
@@ -49,8 +48,6 @@ interface UseDigitalCardReturn {
  * Intègre le backend GraphQL avec gestion intelligente des états
  */
 export const useDigitalCard = (): UseDigitalCardReturn => {
-  const [timeRemaining, setTimeRemaining] = useState(30);
-
   // 🔍 Query pour statut abonnement (toujours chargé)
   const { 
     data: subscriptionData, 
@@ -115,29 +112,6 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
       }
     }
   );
-
-  // ⏱️ Gestion du countdown automatique
-  useEffect(() => {
-    if (cardData?.getMyDigitalCard?.card?.timeUntilRotation) {
-      setTimeRemaining(cardData.getMyDigitalCard.card.timeUntilRotation);
-    }
-  }, [cardData]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          // Auto-refresh quand le token expire
-          console.log('🔄 Token expiré, refresh automatique...');
-          refetchCard();
-          return 30; // Reset countdown
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [refetchCard]);
 
   // 🎯 Actions simplifiées
   const toggleCard = useCallback(async () => {
@@ -207,7 +181,6 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     subscriptionStatus: subscriptionData?.getSubscriptionStatus || null,
     cardData: cardData?.getMyDigitalCard || null,
     cardUsage: usageData?.getCardUsageHistory || null,
-    timeRemaining,
     
     // États de chargement
     loading,
