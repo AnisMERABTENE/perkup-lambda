@@ -15,6 +15,7 @@ import {
   ToggleCardResponse,
   ResetCardResponse
 } from '@/graphql/mutations/digitalCard';
+import { wsClient } from '@/services/WebSocketClient';
 
 interface UseDigitalCardReturn {
   // Données
@@ -189,6 +190,13 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
       console.error('❌ Erreur refresh complet:', error);
     }
   }, [refetchSubscription, refetchCard, refetchUsage]);
+
+  useEffect(() => {
+    const unsubscribe = wsClient.on('subscription_updated', () => {
+      refreshAll();
+    });
+    return unsubscribe;
+  }, [refreshAll]);
 
   // 📊 États consolidés
   const loading = subscriptionLoading || cardLoading;

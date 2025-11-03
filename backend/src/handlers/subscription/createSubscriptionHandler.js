@@ -72,6 +72,8 @@ export const handler = async (event) => {
     let subscription;
     let clientSecret = null;
 
+    const previousSubscriptionId = hasActiveSubscription ? user.subscription.stripeSubscriptionId : null;
+
     if (hasActiveSubscription) {
       console.log('Upgrade demandé - création nouveau abonnement...');
       
@@ -117,6 +119,17 @@ export const handler = async (event) => {
         paymentIntent = manualPaymentIntent;
       }
       
+      paymentIntent = await ensurePaymentIntentMetadata(
+        paymentIntent,
+        {
+          userId: user._id.toString(),
+          plan,
+          subscriptionId: subscription.id,
+          invoiceId: subscription.latest_invoice?.id || (typeof subscription.latest_invoice === 'string' ? subscription.latest_invoice : undefined),
+          previousSubscriptionId
+        }
+      );
+      
       if (paymentIntent && typeof paymentIntent === 'object') {
         clientSecret = paymentIntent.client_secret;
       }
@@ -160,6 +173,16 @@ export const handler = async (event) => {
         paymentIntent = manualPaymentIntent;
       }
       
+      paymentIntent = await ensurePaymentIntentMetadata(
+        paymentIntent,
+        {
+          userId: user._id.toString(),
+          plan,
+          subscriptionId: subscription.id,
+          invoiceId: subscription.latest_invoice?.id || (typeof subscription.latest_invoice === 'string' ? subscription.latest_invoice : undefined)
+        }
+      );
+      
       if (paymentIntent && typeof paymentIntent === 'object') {
         clientSecret = paymentIntent.client_secret;
       }
@@ -202,5 +225,43 @@ export const handler = async (event) => {
   } catch (err) {
     console.error('Erreur création abonnement Stripe:', err);
     throw new Error(err.message || 'Erreur lors de la création de l\'abonnement');
+  }
+};
+
+const ensurePaymentIntentMetadata = async (paymentIntent, {
+  userId,
+  plan,
+  subscriptionId,
+  invoiceId,
+  previousSubscriptionId
+}) => {
+  if (!paymentIntent) return null;
+  
+  const paymentIntentId = typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id;
+  
+  const metadata = {
+    user_id: userId,
+    plan,
+    subscription_id: subscriptionId
+  };
+  
+  if (invoiceId) {
+    metadata.invoice_id = invoiceId;
+  }
+  
+  if (previousSubscriptionId) {
+    metadata.previousSubscriptionId = previousSubscriptionId;
+  }
+  
+  try {
+    const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+      metadata
+    });
+    return updatedPaymentIntent;
+  } catch (error) {
+    console.error('Erreur mise à jour metadata PaymentIntent:', error);
+    return typeof paymentIntent === 'string'
+      ? await stripe.paymentIntents.retrieve(paymentIntentId)
+      : paymentIntent;
   }
 };

@@ -2,6 +2,7 @@ import { handler as createSubscriptionHandler } from '../../handlers/subscriptio
 import { handler as getSubscriptionStatusHandler } from '../../handlers/subscription/getSubscriptionStatusHandler.js';
 import { handler as cancelSubscriptionHandler } from '../../handlers/subscription/cancelSubscriptionHandler.js';
 import { handler as reactivateSubscriptionHandler } from '../../handlers/subscription/reactivateSubscriptionHandler.js';
+import { handler as getSubscriptionPlansHandler } from '../../handlers/subscription/getSubscriptionPlansHandler.js';
 import { withAuth, withSubscription } from '../../middlewares/checkSubscription.js';
 
 const subscriptionResolvers = {
@@ -9,6 +10,11 @@ const subscriptionResolvers = {
     getSubscriptionStatus: withAuth(async (_, __, context) => {
       const event = { context };
       return await getSubscriptionStatusHandler(event);
+    }),
+
+    getSubscriptionPlans: withAuth(async (_, __, context) => {
+      const event = { context };
+      return await getSubscriptionPlansHandler(event);
     }),
 
     getPartnerDiscount: withSubscription()(async (_, { partnerDiscount }, context) => {

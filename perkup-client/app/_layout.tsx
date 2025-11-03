@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import 'react-native-reanimated';
 import { ApolloProvider } from '@apollo/client/react';
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import apolloClient from '@/graphql/apolloClient';
@@ -15,6 +16,7 @@ import { getUserData } from '@/utils/storage';
 import AppColors from '@/constants/Colors';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { AuthGuard } from '@/components/AuthGuard';
+import { STRIPE_CONFIG } from '@/constants/Config';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -117,14 +119,27 @@ export default function RootLayout() {
     );
   }
 
+  const publishableKey =
+    STRIPE_CONFIG.PUBLISHABLE_KEY ||
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+    '';
+
+  if (!publishableKey) {
+    console.warn('⚠️ Stripe publishable key manquante. Les paiements ne fonctionneront pas tant que STRIPE_CONFIG.PUBLISHABLE_KEY ou EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ne sont pas définis.');
+  }
+
+  const stripePublishableKey = publishableKey || 'pk_test_placeholder';
+
   return (
-    <ApolloProvider client={apolloClient}>
-      <AuthProvider>
-        <AuthGuard>
-          <RootLayoutNav />
-        </AuthGuard>
-      </AuthProvider>
-    </ApolloProvider>
+    <StripeProvider publishableKey={stripePublishableKey} merchantIdentifier="merchant.perkup.app">
+      <ApolloProvider client={apolloClient}>
+        <AuthProvider>
+          <AuthGuard>
+            <RootLayoutNav />
+          </AuthGuard>
+        </AuthProvider>
+      </ApolloProvider>
+    </StripeProvider>
   );
 }
 

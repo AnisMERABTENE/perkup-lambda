@@ -3,6 +3,7 @@ import User from '../../models/User.js';
 import { connectDB } from '../../services/db.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
+import websocketService from '../../services/websocketService.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,26 +22,35 @@ const handler = async (event) => {
   try {
     await connectDB();
     
-    const sig = event.headers['stripe-signature'];
-    const body = event.body;
+    const signatureHeader =
+      event.headers['Stripe-Signature'] ||
+      event.headers['stripe-signature'] ||
+      event.headers['STRIPE-SIGNATURE'];
+    
+    let rawBody;
+    if (event.isBase64Encoded) {
+      rawBody = Buffer.from(event.body, 'base64');
+    } else {
+      rawBody = event.body;
+    }
     
     console.log('🔍 DEBUGGING:');
-    console.log('- sig:', sig);
+    console.log('- signatureHeader:', signatureHeader);
     console.log('- NODE_ENV:', process.env.NODE_ENV);
-    console.log('- Condition (!sig && NODE_ENV === dev):', !sig && process.env.NODE_ENV === 'development');
+    console.log('- Condition (!signatureHeader && NODE_ENV === dev):', !signatureHeader && process.env.NODE_ENV === 'development');
     
     let stripeEvent;
     
     // Mode test : permettre les événements sans signature pour les tests locaux
-    if (!sig && process.env.NODE_ENV === 'development') {
+    if (!signatureHeader && process.env.NODE_ENV === 'development') {
       console.log('Mode test : webhook sans signature');
       // Parser directement le body comme JSON pour les tests
-      stripeEvent = typeof body === 'string' ? JSON.parse(body) : body;
+      stripeEvent = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
     } else {
       // Mode production : vérifier la signature Stripe
       stripeEvent = stripe.webhooks.constructEvent(
-        body, 
-        sig, 
+        rawBody, 
+        signatureHeader, 
         process.env.STRIPE_WEBHOOK_SECRET
       );
     }
@@ -76,10 +86,26 @@ const handler = async (event) => {
         console.log(`Événement non géré: ${stripeEvent.type}`);
     }
 
-    return { received: true };
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ received: true })
+    };
   } catch (err) {
     console.error('Erreur Webhook:', err.message);
-    throw new Error(`Webhook Error: ${err.message}`);
+    
+    return {
+      statusCode: err?.statusCode ?? 500,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        error: 'Webhook Error',
+        message: err.message || 'Unexpected webhook error'
+      })
+    };
   }
 };
 
@@ -118,6 +144,16 @@ async function handleInvoicePaymentSucceeded(invoice) {
 
     if (updateResult) {
       console.log(`Abonnement activé avec succès - User: ${updateResult.email}, Plan: ${plan}`);
+      await propagateSubscriptionChange(updateResult, {
+        plan,
+        status: 'active',
+        currentPeriodStart: subscription.current_period_start
+          ? new Date(subscription.current_period_start * 1000).toISOString()
+          : undefined,
+        currentPeriodEnd: subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : undefined
+      });
     } else {
       console.error(`Utilisateur introuvable avec subscriptionId: ${subscriptionId}`);
     }
@@ -132,12 +168,20 @@ async function handleInvoicePaymentFailed(invoice) {
 
   if (!subscriptionId) return;
 
-  await User.findOneAndUpdate(
+  const updatedUser = await User.findOneAndUpdate(
     { 'subscription.stripeCustomerId': customerId },
-    { $set: { 'subscription.status': 'past_due' } }
+    { $set: { 'subscription.status': 'past_due' } },
+    { new: true }
   );
 
   console.log(`Échec de paiement d'abonnement - Customer: ${customerId}`);
+
+  if (updatedUser) {
+    await propagateSubscriptionChange(updatedUser, {
+      plan: updatedUser.subscription?.plan,
+      status: 'past_due'
+    });
+  }
 }
 
 async function handleSubscriptionCreated(subscription) {
@@ -160,13 +204,24 @@ async function handleSubscriptionCreated(subscription) {
 
     const result = await User.findOneAndUpdate(
       { 'subscription.stripeCustomerId': customerId },
-      { $set: updateData }
+      { $set: updateData },
+      { new: true }
     );
 
     if (!result) {
       console.error(`Utilisateur introuvable avec customerId: ${customerId}`);
     } else {
       console.log(`Abonnement créé - Customer: ${customerId}, Plan: ${plan}, Status: ${subscription.status}`);
+      await propagateSubscriptionChange(result, {
+        plan,
+        status: subscription.status,
+        currentPeriodStart: subscription.current_period_start
+          ? new Date(subscription.current_period_start * 1000).toISOString()
+          : undefined,
+        currentPeriodEnd: subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : undefined
+      });
     }
   } catch (error) {
     console.error(`Erreur dans handleSubscriptionCreated:`, error);
@@ -196,28 +251,51 @@ async function handleSubscriptionUpdated(subscription) {
     updateData['subscription.currentPeriodEnd'] = new Date(subscription.current_period_end * 1000);
   }
 
-  await User.findOneAndUpdate(
+  const updatedUser = await User.findOneAndUpdate(
     { 'subscription.stripeCustomerId': customerId },
-    { $set: updateData }
+    { $set: updateData },
+    { new: true }
   );
 
   console.log(`Abonnement mis à jour - Customer: ${customerId}, Status: ${subscription.status}`);
+
+  if (updatedUser) {
+    await propagateSubscriptionChange(updatedUser, {
+      plan,
+      status: subscription.status,
+      currentPeriodStart: subscription.current_period_start
+        ? new Date(subscription.current_period_start * 1000).toISOString()
+        : undefined,
+      currentPeriodEnd: subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000).toISOString()
+        : undefined
+    });
+  }
 }
 
 async function handleSubscriptionDeleted(subscription) {
   const customerId = subscription.customer;
 
-  await User.findOneAndUpdate(
+  const updatedUser = await User.findOneAndUpdate(
     { 'subscription.stripeCustomerId': customerId },
     {
       $set: {
         'subscription.status': 'canceled',
         'subscription.endDate': new Date()
       }
-    }
+    },
+    { new: true }
   );
 
   console.log(`Abonnement annulé - Customer: ${customerId}`);
+
+  if (updatedUser) {
+    await propagateSubscriptionChange(updatedUser, {
+      plan: updatedUser.subscription?.plan,
+      status: 'canceled',
+      endDate: updatedUser.subscription?.endDate?.toISOString?.() || new Date().toISOString()
+    });
+  }
 }
 
 async function handlePaymentIntentSucceeded(paymentIntent) {
@@ -293,6 +371,12 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 
     if (updateResult) {
       console.log(`Abonnement activé - User: ${updateResult.email}, Plan: ${plan}`);
+      await propagateSubscriptionChange(updateResult, {
+        plan,
+        status: 'active',
+        currentPeriodStart: startDate.toISOString(),
+        currentPeriodEnd: endDate.toISOString()
+      });
     } else {
       console.error(`Utilisateur introuvable: ${userId}`);
     }
@@ -309,6 +393,28 @@ function getPlanFromSubscription(subscription) {
   if (priceId === process.env.STRIPE_PRICE_PREMIUM) return 'premium';
   
   return 'unknown';
+}
+
+async function propagateSubscriptionChange(userDoc, subscriptionInfo) {
+  if (!userDoc) return;
+  const userId = userDoc._id ? userDoc._id.toString() : userDoc.id;
+  
+  try {
+    await Promise.all([
+      SubscriptionCache.invalidateSubscription(userId),
+      UserCache.invalidateAllUserCache(userId, userDoc.email)
+    ]);
+    
+    await websocketService.notifyUser(userId, {
+      type: 'subscription_updated',
+      subscription: {
+        ...subscriptionInfo,
+        updatedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur propagation abonnement:', error);
+  }
 }
 
 // Export ES modules

@@ -203,6 +203,25 @@ export const clearPartnersCache = () => {
   apolloClient.cache.gc(); // Garbage collection
 };
 
+export const clearSubscriptionCache = () => {
+  console.log('🧹 Nettoyage cache subscription');
+  apolloClient.cache.evict({ fieldName: 'getSubscriptionStatus' });
+  apolloClient.cache.evict({ fieldName: 'getMyDigitalCard' });
+  apolloClient.cache.evict({ fieldName: 'getCardUsageHistory' });
+  apolloClient.cache.evict({ fieldName: 'getSubscriptionPlans' });
+  apolloClient.cache.gc();
+};
+
+export const refreshSubscriptionData = async () => {
+  try {
+    await apolloClient.refetchQueries({
+      include: ['GetSubscriptionStatus', 'GetMyDigitalCard', 'GetCardUsageHistory']
+    });
+  } catch (error) {
+    console.error('❌ Erreur refresh subscription:', error);
+  }
+};
+
 // 🔄 Forcer refresh des partners avec gestion d'erreur
 export const refreshPartners = async () => {
   try {

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearPartnersCache } from '@/graphql/apolloClient';
+import { clearPartnersCache, clearSubscriptionCache, refreshSubscriptionData } from '@/graphql/apolloClient';
 import { API_CONFIG, WEBSOCKET_CONFIG } from '@/constants/Config';
 
 /**
@@ -99,6 +99,10 @@ class WebSocketClient {
           
         case 'cache_invalidated':
           this.handleCacheInvalidation(message);
+          break;
+        
+        case 'subscription_updated':
+          this.handleSubscriptionUpdate(message);
           break;
           
         default:
@@ -253,6 +257,20 @@ class WebSocketClient {
     
     // Notifier pour refresh global
     this.emit('cache_invalidated', message.keys);
+  }
+  
+  /**
+   * 🔔 MISE À JOUR ABONNEMENT
+   */
+  handleSubscriptionUpdate(message: any) {
+    console.log('🟢 Abonnement mis à jour:', message.subscription?.status);
+    
+    clearSubscriptionCache();
+    refreshSubscriptionData().catch((error) => {
+      console.error('❌ Erreur refresh subscription data:', error);
+    });
+    
+    this.emit('subscription_updated', message);
   }
   
   /**

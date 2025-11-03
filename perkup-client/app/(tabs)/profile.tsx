@@ -52,6 +52,10 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleSubscriptionNavigation = () => {
+    router.push('/subscription/plans');
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={AppColors.gradientPrimary} style={styles.header}>
@@ -77,7 +81,7 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleSubscriptionNavigation}>
             <Ionicons name="card-outline" size={24} color={AppColors.primary} />
             <Text style={styles.menuText}>Mon abonnement</Text>
             <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />

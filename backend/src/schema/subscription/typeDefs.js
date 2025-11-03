@@ -25,6 +25,32 @@ const subscriptionTypeDefs = `
     isActive: Boolean!
     subscriptionType: String!
   }
+
+  type SubscriptionPlan {
+    plan: PlanType!
+    title: String!
+    subtitle: String
+    description: String
+    highlight: String
+    price: Float!
+    priceText: String!
+    interval: String!
+    discountPercentage: Int!
+    badge: String
+    isPopular: Boolean!
+    isBestValue: Boolean!
+    requiresPayment: Boolean!
+    features: [String!]!
+    isCurrentPlan: Boolean!
+    isUpgrade: Boolean!
+    isDowngrade: Boolean!
+  }
+
+  type SubscriptionPlansResponse {
+    currency: String!
+    currentPlan: PlanType
+    plans: [SubscriptionPlan!]!
+  }
   
   type CreateSubscriptionResponse {
     subscriptionId: String!
@@ -44,6 +70,7 @@ const subscriptionTypeDefs = `
 
   extend type Query {
     getSubscriptionStatus: SubscriptionStatus!
+    getSubscriptionPlans: SubscriptionPlansResponse!
     getPartnerDiscount(partnerDiscount: Int!): DiscountResponse!
   }
 

@@ -95,7 +95,7 @@ export const DEBUG_CONFIG = {
 // 💳 STRIPE (clés publiques uniquement)
 export const STRIPE_CONFIG = {
   // À remplir avec vos clés Stripe si nécessaire
-  PUBLISHABLE_KEY: '', // Clé publique Stripe
+  PUBLISHABLE_KEY: 'pk_test_51RmqoFPx2yTZXeECyTjnxxj2DUPIs1XIh7N1OXFf3TBz01LtLsObfkda7LzDUfW06tDXkhdRMMOVeIIwEjRKNtpd00NdaRPi9B', // Clé publique Stripe
 } as const;
 
 // 🔔 NOTIFICATIONS
