@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "scheme": "perkup-vendeur",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#6366F1"
@@ -47,7 +46,8 @@
           "photosPermission": "L'application accède à vos photos pour vous permettre de partager vos images de boutique."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-barcode-scanner"
     ],
     "experiments": {
       "typedRoutes": true

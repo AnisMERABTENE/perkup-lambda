@@ -60,7 +60,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     if (typeof backendDuration === 'number' && backendDuration > 0) {
       return backendDuration;
     }
-    return 60;
+    return 120;
   }, [cardData]);
 
   const stopTimer = useCallback(() => {
@@ -394,7 +394,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
           <View style={styles.infoItem}>
             <Ionicons name="shield-checkmark" size={20} color={AppColors.success} />
             <Text style={styles.infoText}>
-              Code sécurisé qui change toutes les 60 secondes
+              Code sécurisé qui change toutes les 120 secondes
             </Text>
           </View>
           
