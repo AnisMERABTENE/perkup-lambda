@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { wsClient } from '@/services/WebSocketClient';
 
 interface UseWebSocketReturn {
@@ -42,7 +42,12 @@ export const useWebSocket = (): UseWebSocketReturn => {
 
     const unsubscribePartnerChanged = wsClient.on('partner_changed', (update: any) => {
       console.log('🏪 Hook: Partner mis à jour', update);
-      setPartnerUpdates(prev => [update, ...prev.slice(0, 9)]); // Garder 10 dernières mises à jour
+      const normalizedId = update?.id ?? Date.now();
+      const normalizedUpdate = { ...update, id: normalizedId };
+      setPartnerUpdates(prev => {
+        const filtered = prev.filter(item => item.id !== normalizedId);
+        return [normalizedUpdate, ...filtered].slice(0, 10);
+      }); // Garder 10 dernières mises à jour uniques
     });
 
     const unsubscribeCacheInvalidated = wsClient.on('cache_invalidated', (keys: string[]) => {
@@ -95,6 +100,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
 export const usePartnerUpdates = (city?: string, category?: string) => {
   const { connected, partnerUpdates, subscribe, unsubscribe } = useWebSocket();
   const [relevantUpdates, setRelevantUpdates] = useState<any[]>([]);
+  const [pendingRefetchIds, setPendingRefetchIds] = useState<string[]>([]);
 
   useEffect(() => {
     // Construire les topics selon les filtres
@@ -138,10 +144,43 @@ export const usePartnerUpdates = (city?: string, category?: string) => {
     setRelevantUpdates(filtered);
   }, [partnerUpdates, city, category]);
 
+  useEffect(() => {
+    setPendingRefetchIds(prev => {
+      const next = new Set(prev);
+      relevantUpdates.forEach(update => {
+        if (update?.requiresRefetch) {
+          const id = update.id ?? update.timestamp;
+          if (id != null) {
+            next.add(String(id));
+          }
+        }
+      });
+      return Array.from(next);
+    });
+  }, [relevantUpdates]);
+
+  const refetchUpdates = useMemo(() => {
+    if (pendingRefetchIds.length === 0) return [];
+    return relevantUpdates.filter(update => {
+      if (!update?.requiresRefetch) return false;
+      const id = update.id ?? update.timestamp;
+      if (id == null) return false;
+      return pendingRefetchIds.includes(String(id));
+    });
+  }, [relevantUpdates, pendingRefetchIds]);
+
+  const acknowledgeUpdates = useCallback((ids: Array<string | number>) => {
+    if (!ids || ids.length === 0) return;
+    const idsSet = new Set(ids.map(id => String(id)));
+    setPendingRefetchIds(prev => prev.filter(id => !idsSet.has(id)));
+  }, []);
+
   return {
     connected,
     updates: relevantUpdates,
-    hasNewUpdates: relevantUpdates.length > 0
+    hasNewUpdates: refetchUpdates.length > 0,
+    refetchUpdates,
+    acknowledgeUpdates
   };
 };
 

@@ -5,6 +5,7 @@ export const GET_PARTNERS = gql`
   query GetPartners($category: String) {
     getPartners(category: $category) {
       partners {
+        id
         name
         category
         address
@@ -54,6 +55,7 @@ export const SEARCH_PARTNERS = gql`
       limit: $limit
     ) {
       partners {
+        id
         name
         category
         address
@@ -182,6 +184,7 @@ export const GET_PARTNER_DETAIL = gql`
 
 // ✅ Types TypeScript optimisés
 export interface Partner {
+  id: string;
   name: string;
   category: string;
   address: string;

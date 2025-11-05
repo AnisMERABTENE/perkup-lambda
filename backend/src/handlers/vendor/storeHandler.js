@@ -5,6 +5,7 @@ import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
 import { validateCloudinaryUrl } from '../../services/cloudinaryService.js';
 import GeocodingService from '../../services/geocodingService.js';
 import { websocketService } from '../../services/websocketService.js';
+import formatPartnerForNotification from '../../utils/partnerFormatter.js';
 
 // Créer une boutique
 export const createStoreHandler = async (event) => {
@@ -90,6 +91,8 @@ export const createStoreHandler = async (event) => {
     
     console.log(`Boutique créée avec coordonnées précises: ${name} - ${coordinates[1]}, ${coordinates[0]}`);
     
+    const formattedStore = formatPartnerForNotification(store);
+
     // 🔥 INVALIDATION CACHE + NOTIFICATION WEBSOCKET TEMPS RÉEL
     await PartnerCache.invalidatePartner(store._id, userId);
     
@@ -97,13 +100,7 @@ export const createStoreHandler = async (event) => {
     await websocketService.notifyPartnerChangeByLocation(
       store._id.toString(),
       'created',
-      {
-        id: store._id.toString(),
-        name: store.name,
-        category: store.category,
-        city: store.city,
-        discount: store.discount
-      },
+      formattedStore,
       store.city,
       store.category
     );
@@ -204,7 +201,8 @@ export const updateStoreHandler = async (event) => {
       location: GeocodingService.createGeoJSONLocation(coordinates[1], coordinates[0]),
       updatedAt: new Date()
     };
-    
+    const previousSnapshot = formatPartnerForNotification(existingStore);
+
     const updatedStore = await Partner.findByIdAndUpdate(
       existingStore._id,
       updateData,
@@ -212,6 +210,8 @@ export const updateStoreHandler = async (event) => {
     );
     
     console.log(`Boutique modifiée: ${name}`);
+    
+    const formattedStore = formatPartnerForNotification(updatedStore);
     
     // 🔥 INVALIDATION CACHE + NOTIFICATION WEBSOCKET TEMPS RÉEL
     await PartnerCache.invalidatePartner(updatedStore._id, userId);
@@ -221,11 +221,9 @@ export const updateStoreHandler = async (event) => {
       updatedStore._id.toString(),
       'updated',
       {
-        id: updatedStore._id.toString(),
-        name: updatedStore.name,
-        category: updatedStore.category,
-        city: updatedStore.city,
-        discount: updatedStore.discount
+        ...formattedStore,
+        previous: previousSnapshot,
+        changes: Object.keys(input)
       },
       updatedStore.city,
       updatedStore.category

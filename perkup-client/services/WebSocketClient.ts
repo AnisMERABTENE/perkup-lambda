@@ -1,6 +1,184 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearPartnersCache, clearSubscriptionCache, refreshSubscriptionData } from '@/graphql/apolloClient';
+import { 
+  apolloClient, 
+  clearPartnersCache, 
+  clearSubscriptionCache, 
+  evictPartnerListCache, 
+  evictSearchPartnersCache, 
+  refreshSubscriptionData 
+} from '@/graphql/apolloClient';
 import { API_CONFIG, WEBSOCKET_CONFIG } from '@/constants/Config';
+import { GET_PARTNERS, PartnersResponse } from '@/graphql/queries/partners';
+
+interface PartnerLocationPayload {
+  latitude: number;
+  longitude: number;
+}
+
+interface NormalizedPartner {
+  id?: string;
+  name?: string;
+  category?: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  phone?: string;
+  discount?: number;
+  offeredDiscount?: number;
+  description?: string;
+  logo?: string | null;
+  website?: string | null;
+  isActive?: boolean;
+  location?: PartnerLocationPayload | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface PartnerNotificationPayload extends NormalizedPartner {
+  previous?: NormalizedPartner | null;
+  changes?: string[];
+  deletedAt?: string;
+}
+
+const MAX_DISCOUNT_BY_PLAN: Record<string, number> = {
+  basic: 5,
+  super: 10,
+  premium: 100
+};
+
+const calculateUserDiscount = (partnerDiscount: number, userPlan: string): number => {
+  if (userPlan === 'premium') {
+    return partnerDiscount;
+  }
+  const max = MAX_DISCOUNT_BY_PLAN[userPlan] ?? 0;
+  return Math.min(partnerDiscount, max);
+};
+
+const normalizePartnerPayload = (payload: any): NormalizedPartner | undefined => {
+  if (!payload) return undefined;
+  
+  const id = payload.id ?? payload._id;
+  const baseLocation = payload.location || {};
+  let latitude = baseLocation.latitude;
+  let longitude = baseLocation.longitude;
+  
+  if (Array.isArray(baseLocation.coordinates) && baseLocation.coordinates.length === 2) {
+    longitude = baseLocation.coordinates[0];
+    latitude = baseLocation.coordinates[1];
+  }
+  
+  const parsedLatitude = latitude != null ? Number(latitude) : undefined;
+  const parsedLongitude = longitude != null ? Number(longitude) : undefined;
+  
+  return {
+    id: id != null ? String(id) : undefined,
+    name: payload.name ?? undefined,
+    category: payload.category ?? undefined,
+    address: payload.address ?? undefined,
+    city: payload.city ?? undefined,
+    zipCode: payload.zipCode ?? undefined,
+    phone: payload.phone ?? undefined,
+    discount: payload.discount ?? payload.offeredDiscount ?? undefined,
+    offeredDiscount: payload.offeredDiscount ?? payload.discount ?? undefined,
+    description: payload.description ?? undefined,
+    logo: payload.logo ?? undefined,
+    website: payload.website ?? undefined,
+    isActive: payload.isActive ?? undefined,
+    createdAt: payload.createdAt ?? undefined,
+    updatedAt: payload.updatedAt ?? undefined,
+    location: parsedLatitude != null && parsedLongitude != null 
+      ? { latitude: parsedLatitude, longitude: parsedLongitude }
+      : null
+  };
+};
+
+const matchesCategory = (category?: string, target?: string): boolean => {
+  if (!target) return true;
+  if (!category) return false;
+  return category.toLowerCase() === target.toLowerCase();
+};
+
+const matchesPartnerEntry = (entry: any, partner: NormalizedPartner, previous?: NormalizedPartner): boolean => {
+  if (!entry) return false;
+  const entryId = entry.id ?? entry._id;
+  
+  if (entryId && partner.id && String(entryId) === partner.id) {
+    return true;
+  }
+  
+  if (entryId && previous?.id && String(entryId) === previous.id) {
+    return true;
+  }
+  
+  const entryName = entry.name ? String(entry.name).toLowerCase() : undefined;
+  const entryCity = entry.city ? String(entry.city).toLowerCase() : undefined;
+  
+  if (partner.name && partner.city && entryName === partner.name.toLowerCase() && entryCity === partner.city.toLowerCase()) {
+    return true;
+  }
+  
+  if (
+    previous?.name &&
+    previous.city &&
+    entryName === previous.name.toLowerCase() &&
+    entryCity === previous.city.toLowerCase()
+  ) {
+    return true;
+  }
+  
+  return false;
+};
+
+const comparePartnersByName = (a: any, b: any): number => {
+  const nameA = a?.name ? String(a.name).toLowerCase() : '';
+  const nameB = b?.name ? String(b.name).toLowerCase() : '';
+  return nameA.localeCompare(nameB);
+};
+
+const enrichPartnerForPlan = (
+  partner: NormalizedPartner,
+  userPlan: string,
+  existing?: any
+) => {
+  const offeredDiscount = partner.offeredDiscount ?? partner.discount ?? existing?.offeredDiscount ?? existing?.discount ?? 0;
+  const discount = partner.discount ?? offeredDiscount;
+  const location = partner.location ?? existing?.location ?? null;
+  
+  const normalizedLocation = location
+    ? {
+        __typename: 'Location',
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude)
+      }
+    : null;
+  
+  const maxAllowed = userPlan === 'premium' ? Number.POSITIVE_INFINITY : (MAX_DISCOUNT_BY_PLAN[userPlan] ?? 0);
+  const canAccessFullDiscount = userPlan === 'premium' ? true : offeredDiscount <= maxAllowed;
+  
+  return {
+    __typename: 'Partner',
+    id: partner.id ?? existing?.id ?? '',
+    name: partner.name ?? existing?.name ?? '',
+    category: partner.category ?? existing?.category ?? '',
+    address: partner.address ?? existing?.address ?? '',
+    city: partner.city ?? existing?.city ?? '',
+    zipCode: partner.zipCode ?? existing?.zipCode ?? '',
+    phone: partner.phone ?? existing?.phone ?? '',
+    discount,
+    offeredDiscount,
+    description: partner.description ?? existing?.description ?? '',
+    logo: partner.logo ?? existing?.logo ?? null,
+    website: partner.website ?? existing?.website ?? null,
+    isActive: partner.isActive ?? existing?.isActive ?? true,
+    userDiscount: calculateUserDiscount(offeredDiscount, userPlan),
+    isPremiumOnly: offeredDiscount > 15,
+    canAccessFullDiscount,
+    needsSubscription: userPlan === 'free' && offeredDiscount > 0,
+    location: normalizedLocation,
+    createdAt: partner.createdAt ?? existing?.createdAt ?? null,
+    updatedAt: partner.updatedAt ?? existing?.updatedAt ?? null
+  };
+};
 
 /**
  * 🔥 CLIENT WEBSOCKET TEMPS RÉEL POUR PERKUP
@@ -230,18 +408,154 @@ class WebSocketClient {
    * 🎯 GÉRER MISE À JOUR PARTNER
    */
   handlePartnerUpdate(message: any) {
-    console.log(`🏪 Partner ${message.action}:`, message.data.name);
+    const partnerName = message?.data?.name || 'inconnu';
+    console.log(`🏪 Partner ${message.action}:`, partnerName);
     
-    // Invalider le cache Apollo pour forcer le refresh
-    clearPartnersCache();
+    let applied = false;
+    
+    try {
+      applied = this.applyPartnerUpdateToCache(message);
+    } catch (error) {
+      console.error('❌ Erreur application patch cache partner:', error);
+    }
+
+    try {
+      evictSearchPartnersCache();
+    } catch (error) {
+      console.error('❌ Erreur nettoyage cache recherche partners:', error);
+    }
+
+    if (!applied) {
+      console.log('⚠️ Patch cache incomplet, invalidation liste partners');
+      evictPartnerListCache();
+    }
     
     // Notifier les composants intéressés
     this.emit('partner_changed', {
+      id: message.timestamp || Date.now(),
       action: message.action,
       partner: message.data,
       city: message.city,
-      category: message.category
+      category: message.category,
+      applied,
+      requiresRefetch: !applied
     });
+  }
+
+  private applyPartnerUpdateToCache(message: any): boolean {
+    if (!message?.data) {
+      return false;
+    }
+    
+    const action: string = message.action;
+    const normalized = normalizePartnerPayload(message.data as PartnerNotificationPayload);
+    if (!normalized) {
+      return false;
+    }
+    
+    const previous = normalizePartnerPayload((message.data as PartnerNotificationPayload)?.previous);
+    
+    const categoriesMap: Record<string, string> = {};
+    if (normalized.category) {
+      categoriesMap[normalized.category.toLowerCase()] = normalized.category;
+    }
+    if (previous?.category) {
+      const lower = previous.category.toLowerCase();
+      if (!normalized.category || normalized.category.toLowerCase() !== lower) {
+        categoriesMap[lower] = previous.category;
+      }
+    }
+
+    const variablesList: Array<{ category?: string } | undefined> = [undefined];
+    Object.values(categoriesMap).forEach((category) => {
+      variablesList.push({ category });
+    });
+    
+    let applied = false;
+    
+    variablesList.forEach((variables) => {
+      const changed = this.updatePartnerListCache(variables, normalized, previous, action);
+      applied = applied || changed;
+    });
+    
+    return applied;
+  }
+
+  private updatePartnerListCache(
+    variables: { category?: string } | undefined,
+    partner: NormalizedPartner,
+    previous: NormalizedPartner | undefined,
+    action: string
+  ): boolean {
+    const options: { query: any; variables?: { category?: string } } = { query: GET_PARTNERS };
+    if (variables?.category) {
+      options.variables = { category: variables.category };
+    }
+    
+    let cacheUpdated = false;
+    
+    apolloClient.cache.updateQuery<PartnersResponse>(options, (data) => {
+      if (!data?.getPartners) {
+        return data;
+      }
+      
+      const response = data.getPartners;
+      const partners = response.partners || [];
+      const targetCategory = variables?.category;
+      
+      const partnerInTarget = matchesCategory(partner.category, targetCategory);
+      const previousInTarget = matchesCategory(previous?.category, targetCategory);
+      
+      const existingIndex = partners.findIndex((entry: any) => matchesPartnerEntry(entry, partner, previous));
+      let updatedPartners = partners.slice();
+      let changed = false;
+      
+      if (
+        action === 'deleted' ||
+        (action === 'updated' && !partnerInTarget && previous && previousInTarget)
+      ) {
+        if (existingIndex !== -1) {
+          updatedPartners.splice(existingIndex, 1);
+          changed = true;
+        }
+      } else if (partnerInTarget) {
+        const existingEntry = existingIndex !== -1 ? partners[existingIndex] : undefined;
+        const enrichedPartner = enrichPartnerForPlan(partner, response.userPlan || 'free', existingEntry);
+        
+        if (existingIndex !== -1) {
+          updatedPartners[existingIndex] = { ...existingEntry, ...enrichedPartner };
+        } else {
+          updatedPartners.push(enrichedPartner);
+        }
+        changed = true;
+      }
+      
+      if (!changed) {
+        return data;
+      }
+      
+      updatedPartners = updatedPartners
+        .filter(Boolean)
+        .sort(comparePartnersByName);
+      
+      const availableCategories = Array.from(
+        new Set(updatedPartners.map((item: any) => item.category).filter(Boolean))
+      );
+      
+      cacheUpdated = true;
+      
+      return {
+        ...data,
+        getPartners: {
+          ...response,
+          partners: updatedPartners,
+          totalPartners: updatedPartners.length,
+          availableCategories
+        }
+      };
+    });
+    
+    return cacheUpdated;
   }
   
   /**

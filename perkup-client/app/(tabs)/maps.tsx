@@ -133,6 +133,20 @@ export default function MapsScreen() {
     });
   }, [partners, selectedCategory, selectedCityGroup]);
 
+  const uniqueFilteredPartners = useMemo(() => {
+    const seen = new Set<string>();
+    return filteredPartners.filter((partner) => {
+      const key = partner.id
+        ? `id:${partner.id}`
+        : `slug:${partner.name?.toLowerCase()}::${partner.city?.toLowerCase() || ''}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [filteredPartners]);
+
   // 📍 Récupérer la position utilisateur AU DÉMARRAGE
   useEffect(() => {
     getUserLocation();
@@ -140,14 +154,14 @@ export default function MapsScreen() {
 
   // 🗺️ Traiter les données des partenaires
   useEffect(() => {
-    if (filteredPartners && filteredPartners.length > 0) {
+    if (uniqueFilteredPartners && uniqueFilteredPartners.length > 0) {
       const partnersMarkers: StoreMarker[] = [];
       
-      filteredPartners.forEach((partner: any, index: number) => {
+      uniqueFilteredPartners.forEach((partner: any, index: number) => {
         // UTILISER LES VRAIES COORDONNÉES GPS
         if (partner.location && partner.location.latitude && partner.location.longitude) {
           partnersMarkers.push({
-            id: `${partner.name}-${index}`,
+            id: partner.id || `${partner.name}-${index}`,
             name: partner.name,
             category: partner.category,
             address: `${partner.address}, ${partner.city}`,
@@ -178,7 +192,7 @@ export default function MapsScreen() {
         webViewRef.current.postMessage(jsCode);
       }
     }
-  }, [filteredPartners, mapReady]);
+  }, [uniqueFilteredPartners, mapReady]);
 
   // 📍 RÉCUPÉRER POSITION UTILISATEUR (NATIF, CÔTÉ FRONT UNIQUEMENT)
   const getUserLocation = async () => {

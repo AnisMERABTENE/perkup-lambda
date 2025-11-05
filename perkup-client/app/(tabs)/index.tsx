@@ -153,6 +153,20 @@ export default function PartnersScreen() {
     });
   }, [partners, searchQuery, selectedCategory, selectedCityGroup]);
 
+  const uniqueFilteredPartners = useMemo(() => {
+    const seen = new Set<string>();
+    return filteredPartners.filter(partner => {
+      const key = partner.id
+        ? `id:${partner.id}`
+        : `slug:${partner.name.toLowerCase()}::${partner.city?.toLowerCase() || ''}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [filteredPartners]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -327,7 +341,7 @@ export default function PartnersScreen() {
             <Text style={styles.greeting}>Salut {userData?.firstname || 'Anis'}</Text>
             <Text style={styles.plan}>{userPlan || 'free'}</Text>
             <Text style={styles.statsText}>
-              {filteredPartners.length} partenaires trouvés sur {totalFound}
+              {uniqueFilteredPartners.length} partenaires trouvés sur {totalFound}
             </Text>
           </View>
 
@@ -360,9 +374,9 @@ export default function PartnersScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredPartners}
+          data={uniqueFilteredPartners}
           renderItem={renderPartner}
-          keyExtractor={(item, index) => `${item.name}-${index}`}
+          keyExtractor={(item, index) => item.id || `${item.name}-${index}`}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl

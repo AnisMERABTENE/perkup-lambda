@@ -192,15 +192,25 @@ export const apolloClient = new ApolloClient({
 // ✅ FONCTIONS UTILITAIRES CENTRALISÉES POUR CACHE MANAGEMENT
 
 // 🧹 Nettoyer le cache des partners (après changement localisation)
-export const clearPartnersCache = () => {
-  console.log('🧹 Nettoyage cache partners');
+export const evictSearchPartnersCache = () => {
+  console.log('🧹 Nettoyage cache partners (search)');
   apolloClient.cache.evict({ 
     fieldName: 'searchPartners'
   });
+  apolloClient.cache.gc();
+};
+
+export const evictPartnerListCache = () => {
+  console.log('🧹 Nettoyage cache partners (listes)');
   apolloClient.cache.evict({ 
     fieldName: 'getPartners' 
   });
   apolloClient.cache.gc(); // Garbage collection
+};
+
+export const clearPartnersCache = () => {
+  evictPartnerListCache();
+  evictSearchPartnersCache();
 };
 
 export const clearSubscriptionCache = () => {

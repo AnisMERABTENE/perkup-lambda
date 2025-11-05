@@ -92,7 +92,12 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
   const shouldSkipQueries = !isAuthenticated || authLoading;
 
   // 🔥 WEBSOCKET TEMPS RÉEL pour auto-refresh
-  const { connected: wsConnected, updates: partnerUpdates, hasNewUpdates } = usePartnerUpdates(city, category);
+  const { 
+    connected: wsConnected, 
+    updates: partnerUpdates, 
+    refetchUpdates, 
+    acknowledgeUpdates 
+  } = usePartnerUpdates(city, category);
 
   // 📊 États locaux
   const [lastLocation, setLastLocation] = useState<{ lat?: number; lng?: number }>({});
@@ -250,37 +255,53 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
   const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
   
   useEffect(() => {
-    if (hasNewUpdates && wsConnected && !isProcessingUpdate) {
-      console.log('🔔 Nouvelles données reçues via WebSocket, refresh auto');
-      
-      // PROTECTION: Empêcher les appels multiples
-      setIsProcessingUpdate(true);
-      
-      // Debounce pour éviter les appels rapides successifs
-      const timer = setTimeout(async () => {
-        try {
-          // Invalider cache et recharger
-          clearCache();
-          
-          // Refetch avec nouvelles données
-          if (enableIntelligentCache) {
-            await loadDataWithSmartCache(true); // Force refresh
-          } else {
-            await refetch();
-          }
-        } catch (error) {
-          console.error('❌ Erreur refresh WebSocket:', error);
-        } finally {
-          // Libérer le flag après 2 secondes pour permettre les prochaines mises à jour
-          setTimeout(() => {
-            setIsProcessingUpdate(false);
-          }, 2000);
-        }
-      }, 500); // Debounce de 500ms
-      
-      return () => clearTimeout(timer);
+    if (!wsConnected || isProcessingUpdate || refetchUpdates.length === 0) {
+      return;
     }
-  }, [hasNewUpdates, wsConnected, enableIntelligentCache, isProcessingUpdate]); // Ajouter isProcessingUpdate aux deps
+
+    const idsToAcknowledge = refetchUpdates
+      .map(update => update?.id ?? update?.timestamp)
+      .filter((id): id is string | number => id != null)
+      .map(id => String(id));
+
+    if (idsToAcknowledge.length === 0) {
+      acknowledgeUpdates([]);
+      return;
+    }
+
+    console.log('🔔 Nouvelles données reçues via WebSocket, refresh auto (patch fallback)');
+    setIsProcessingUpdate(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        clearCache();
+        
+        if (enableIntelligentCache) {
+          await loadDataWithSmartCache(true);
+        } else {
+          await refetch();
+        }
+      } catch (error) {
+        console.error('❌ Erreur refresh WebSocket:', error);
+      } finally {
+        acknowledgeUpdates(idsToAcknowledge);
+        setTimeout(() => {
+          setIsProcessingUpdate(false);
+        }, 2000);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    refetchUpdates,
+    wsConnected,
+    isProcessingUpdate,
+    enableIntelligentCache,
+    clearCache,
+    loadDataWithSmartCache,
+    refetch,
+    acknowledgeUpdates
+  ]);
 
   // 🔍 Exécuter recherche automatique selon les filtres
   useEffect(() => {

@@ -3,6 +3,7 @@ import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
 import cacheService from '../../services/cache/cacheService.js';
 import websocketService from '../../services/websocketService.js';
+import formatPartnerForNotification from '../../utils/partnerFormatter.js';
 
 // Fonction utilitaire pour calculer la distance
 const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -432,6 +433,8 @@ export const createPartnerHandler = async (event) => {
     const newPartner = await Partner.create(partnerData);
     
     console.log('✅ Partenaire créé:', newPartner._id);
+
+    const formattedPartner = formatPartnerForNotification(newPartner);
     
     // 🔥 INVALIDATION CACHE
     await PartnerCache.invalidateCache();
@@ -441,21 +444,14 @@ export const createPartnerHandler = async (event) => {
     await websocketService.notifyPartnerChange(
       newPartner._id.toString(),
       'created',
-      {
-        id: newPartner._id.toString(),
-        name: newPartner.name,
-        category: newPartner.category,
-        city: newPartner.city,
-        discount: newPartner.discount,
-        logo: newPartner.logo
-      }
+      formattedPartner
     );
     
     // 🎯 NOTIFICATION PAR GÉOLOCALISATION
     await websocketService.notifyPartnerChangeByLocation(
       newPartner._id.toString(),
       'created',
-      newPartner,
+      formattedPartner,
       newPartner.city,
       newPartner.category
     );
@@ -509,11 +505,12 @@ export const updatePartnerHandler = async (event) => {
     if (!existingPartner) {
       throw new Error('Partenaire introuvable');
     }
-    
     // Vérifier que le vendeur ne peut modifier que ses propres partenaires
     if (userRole === 'vendor' && existingPartner.owner.toString() !== userId) {
       throw new Error('Non autorisé : vous ne pouvez modifier que vos propres partenaires');
     }
+
+    const previousSnapshot = formatPartnerForNotification(existingPartner);
     
     // Préparer les données de mise à jour
     const updateData = {
@@ -543,18 +540,16 @@ export const updatePartnerHandler = async (event) => {
     await PartnerCache.invalidateCache();
     await cacheService.invalidateGroup('partners');
     
+    const formattedPartner = formatPartnerForNotification(updatedPartner);
+    
     // 🚀 NOTIFICATION WEBSOCKET - Partenaire modifié
     await websocketService.notifyPartnerChange(
       id,
       'updated',
       {
-        id: updatedPartner._id.toString(),
-        name: updatedPartner.name,
-        category: updatedPartner.category,
-        city: updatedPartner.city,
-        discount: updatedPartner.discount,
+        ...formattedPartner,
         changes: Object.keys(input),
-        updatedAt: updatedPartner.updatedAt.toISOString()
+        previous: previousSnapshot
       }
     );
     
@@ -563,7 +558,7 @@ export const updatePartnerHandler = async (event) => {
       await websocketService.notifyPartnerChangeByLocation(
         id,
         'updated',
-        updatedPartner,
+        formattedPartner,
         updatedPartner.city,
         updatedPartner.category
       );
@@ -631,16 +626,17 @@ export const deletePartnerHandler = async (event) => {
     await PartnerCache.invalidateCache();
     await cacheService.invalidateGroup('partners');
     
+    const formattedPartner = formatPartnerForNotification(partner);
+    const deletedAt = new Date().toISOString();
+
     // 🚀 NOTIFICATION WEBSOCKET - Partenaire supprimé
     await websocketService.notifyPartnerChange(
       id,
       'deleted',
       {
-        id: id,
-        name: partner.name,
-        category: partner.category,
-        city: partner.city,
-        deletedAt: new Date().toISOString()
+        ...formattedPartner,
+        deletedAt,
+        previous: formattedPartner
       }
     );
     
@@ -648,7 +644,10 @@ export const deletePartnerHandler = async (event) => {
     await websocketService.notifyPartnerChangeByLocation(
       id,
       'deleted',
-      { id, name: partner.name },
+      {
+        ...formattedPartner,
+        deletedAt
+      },
       partner.city,
       partner.category
     );

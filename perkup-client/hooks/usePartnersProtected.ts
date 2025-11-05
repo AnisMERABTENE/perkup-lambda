@@ -145,7 +145,12 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   console.log('🔐 usePartnersProtected - Auth:', isAuthenticated, 'Loading:', authLoading, 'Skip:', shouldSkipQueries, 'Focus:', !skipQueries);
 
   // 🔥 WEBSOCKET TEMPS RÉEL pour auto-refresh (seulement si authentifié ET focus)
-  const { connected: wsConnected, updates: partnerUpdates, hasNewUpdates } = usePartnerUpdates(
+  const { 
+    connected: wsConnected, 
+    updates: partnerUpdates, 
+    refetchUpdates, 
+    acknowledgeUpdates 
+  } = usePartnerUpdates(
     shouldSkipQueries ? undefined : city, 
     shouldSkipQueries ? undefined : category
   );
@@ -318,32 +323,61 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   const [isProcessingUpdate, setIsProcessingUpdate] = useState(false);
   
   useEffect(() => {
-    if (hasNewUpdates && wsConnected && !isProcessingUpdate && isAuthenticated) {
-      console.log('🔔 Nouvelles données reçues via WebSocket, refresh auto');
-      
-      setIsProcessingUpdate(true);
-      
-      const timer = setTimeout(async () => {
-        try {
-          clearCache();
-          
-          if (enableIntelligentCache) {
-            await loadDataWithSmartCache(true);
-          } else {
-            await refetch();
-          }
-        } catch (error) {
-          console.error('❌ Erreur refresh WebSocket:', error);
-        } finally {
-          setTimeout(() => {
-            setIsProcessingUpdate(false);
-          }, 2000);
-        }
-      }, 500);
-      
-      return () => clearTimeout(timer);
+    if (
+      !isAuthenticated ||
+      authLoading ||
+      !wsConnected ||
+      isProcessingUpdate ||
+      refetchUpdates.length === 0
+    ) {
+      return;
     }
-  }, [hasNewUpdates, wsConnected, enableIntelligentCache, isProcessingUpdate, isAuthenticated]);
+
+    const idsToAcknowledge = refetchUpdates
+      .map(update => update?.id ?? update?.timestamp)
+      .filter((id): id is string | number => id != null)
+      .map(id => String(id));
+
+    if (idsToAcknowledge.length === 0) {
+      acknowledgeUpdates([]);
+      return;
+    }
+
+    console.log('🔔 Nouvelles données reçues via WebSocket, refresh protégé');
+    setIsProcessingUpdate(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        clearCache();
+        
+        if (enableIntelligentCache) {
+          await loadDataWithSmartCache(true);
+        } else {
+          await refetch();
+        }
+      } catch (error) {
+        console.error('❌ Erreur refresh WebSocket:', error);
+      } finally {
+        acknowledgeUpdates(idsToAcknowledge);
+        setTimeout(() => {
+          setIsProcessingUpdate(false);
+        }, 2000);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [
+    refetchUpdates,
+    wsConnected,
+    isProcessingUpdate,
+    enableIntelligentCache,
+    isAuthenticated,
+    authLoading,
+    clearCache,
+    loadDataWithSmartCache,
+    refetch,
+    acknowledgeUpdates
+  ]);
   // ✅ CORRECTION: loadDataWithSmartCache et refetch sont stables grâce à useCallback
 
   // 🔍 Exécuter recherche automatique - 🔐 PROTÉGÉ
