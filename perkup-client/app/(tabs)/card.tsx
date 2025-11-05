@@ -1,10 +1,11 @@
 import React from 'react';
 import {
   View,
-  ScrollView,
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  FlatList,
+  ListRenderItem,
 } from 'react-native';
 import { router } from 'expo-router';
 import AppColors from '@/constants/Colors';
@@ -16,23 +17,38 @@ export default function CardScreen() {
     router.push('/subscription/plans');
   };
 
+  const sections = [
+    { type: 'card' as const },
+    { type: 'history' as const }
+  ];
+
+  const renderSection: ListRenderItem<typeof sections[number]> = ({ item }) => {
+    if (item.type === 'card') {
+      return (
+        <View style={styles.sectionContainer}>
+          <DigitalCard onSubscriptionPress={handleSubscriptionPress} />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.sectionContainer}>
+        <DiscountHistory maxItems={5} />
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AppColors.background} />
-      
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 💳 Carte digitale principale */}
-        <DigitalCard 
-          onSubscriptionPress={handleSubscriptionPress}
-        />
 
-        {/* 📊 Historique des réductions */}
-        <DiscountHistory maxItems={5} />
-      </ScrollView>
+      <FlatList
+        data={sections}
+        keyExtractor={(item) => item.type}
+        renderItem={renderSection}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -42,13 +58,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.background,
   },
-  
-  scrollView: {
-    flex: 1,
-  },
-  
-  scrollContent: {
-    flexGrow: 1,
+  listContent: {
     paddingBottom: 20,
+  },
+  sectionContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
 });

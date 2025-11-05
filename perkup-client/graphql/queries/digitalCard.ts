@@ -53,14 +53,29 @@ export const GET_CARD_USAGE_HISTORY = gql`
       }
       usage {
         totalScans
+        totalSavings
         recentUsage {
           usedAt
           token
+          plan
+          partner {
+            id
+            name
+            category
+            address
+          }
+          amounts {
+            original
+            discount
+            final
+            savings
+          }
         }
       }
       security {
         tokenRotates
         currentlyValid
+        lastValidation
       }
     }
   }
@@ -109,9 +124,23 @@ export interface SubscriptionStatusResponse {
 
 export interface CardUsageData {
   totalScans: number;
+  totalSavings: number;
   recentUsage: Array<{
     usedAt: string;
     token: string;
+    plan: string;
+    partner: {
+      id: string | null;
+      name: string | null;
+      category: string | null;
+      address: string | null;
+    } | null;
+    amounts: {
+      original: number;
+      discount: number;
+      final: number;
+      savings: number;
+    };
   }>;
 }
 
@@ -126,6 +155,7 @@ export interface CardUsageResponse {
     security: {
       tokenRotates: string;
       currentlyValid: string;
+      lastValidation?: string | null;
     };
   };
 }

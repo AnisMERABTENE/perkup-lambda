@@ -16,6 +16,7 @@ import {
   ResetCardResponse
 } from '@/graphql/mutations/digitalCard';
 import { wsClient } from '@/services/WebSocketClient';
+import { formatAmount } from '@/utils/cardUtils';
 
 interface UseDigitalCardReturn {
   // Données
@@ -68,7 +69,6 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     error: cardError
   } = useQuery<DigitalCardResponse>(GET_MY_DIGITAL_CARD, {
     skip: !subscriptionData?.getSubscriptionStatus?.isActive,
-    pollInterval: 25000, // Refresh automatique toutes les 25s pour nouveau token
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: true
@@ -169,6 +169,46 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     const unsubscribe = wsClient.on('subscription_updated', () => {
       refreshAll();
     });
+    return unsubscribe;
+  }, [refreshAll]);
+
+  useEffect(() => {
+    const unsubscribe = wsClient.on('coupon_validated', (message?: any) => {
+      const coupon = message?.coupon;
+      if (!coupon) return;
+
+      refreshAll().catch((err) => {
+        console.error('❌ Erreur refresh après coupon:', err);
+      });
+
+      try {
+        const original = typeof coupon.amounts?.original === 'number'
+          ? coupon.amounts.original
+          : null;
+        const final = typeof coupon.amounts?.final === 'number'
+          ? coupon.amounts.final
+          : null;
+        const savings = typeof coupon.amounts?.savings === 'number'
+          ? coupon.amounts.savings
+          : null;
+        const partnerName = coupon.partner?.name || 'notre partenaire';
+
+        const originalLabel = original !== null ? formatAmount(original) : '—';
+        const finalLabel = final !== null ? formatAmount(final) : '—';
+        const savingsLabel = savings !== null ? formatAmount(savings) : null;
+
+        const messageLines = [
+          `Vous payez ${finalLabel} au lieu de ${originalLabel}.`,
+          savingsLabel ? `Économie réalisée : ${savingsLabel}.` : null,
+          `Offre appliquée par ${partnerName}.`
+        ].filter(Boolean);
+
+        Alert.alert('Réduction appliquée ✅', messageLines.join('\n'));
+      } catch (alertError) {
+        console.error('❌ Erreur affichage alerte coupon:', alertError);
+      }
+    });
+
     return unsubscribe;
   }, [refreshAll]);
 

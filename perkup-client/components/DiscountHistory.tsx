@@ -58,16 +58,28 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
       
       <View style={styles.usageInfo}>
         <View style={styles.usageHeader}>
-          <Text style={styles.usageTitle}>Réduction utilisée</Text>
+          <Text style={styles.usageTitle}>
+            {item.partner?.name ? item.partner.name : 'Réduction utilisée'}
+          </Text>
           <Text style={styles.usageDate}>{formatDate(item.usedAt)}</Text>
         </View>
         
         <View style={styles.usageDetails}>
-          <Text style={styles.usageToken}>Token: •••{item.token?.slice(-4)}</Text>
+          <View style={styles.amountBlock}>
+            <Text style={styles.amountFinal}>{formatAmount(item.amounts.final)}</Text>
+            <Text style={styles.amountDetails}>
+              au lieu de {formatAmount(item.amounts.original)}
+            </Text>
+          </View>
           <View style={styles.usageStatus}>
             <Ionicons name="shield-checkmark" size={12} color={AppColors.success} />
-            <Text style={styles.usageStatusText}>Validé</Text>
+            <Text style={styles.usageStatusText}>{formatAmount(item.amounts.savings)} économisés</Text>
           </View>
+        </View>
+
+        <View style={styles.usageFooter}>
+          <Text style={styles.usageToken}>Token: •••{item.token?.slice(-4)}</Text>
+          <Text style={styles.planBadge}>{item.plan?.toUpperCase?.()}</Text>
         </View>
       </View>
     </View>
@@ -79,7 +91,7 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
         <Text style={styles.title}>Historique des Réductions</Text>
         <View style={styles.statsContainer}>
           <Text style={styles.statsText}>
-            {cardUsage?.usage?.totalScans || 0} utilisations
+            {cardUsage?.usage?.totalScans || 0} utilisations • {formatAmount(cardUsage?.usage?.totalSavings || 0)} économisés
           </Text>
         </View>
       </View>
@@ -194,9 +206,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  amountBlock: {
+    flex: 1,
+  },
+
+  amountFinal: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AppColors.primary,
+  },
+
+  amountDetails: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
+  },
+
   usageToken: {
     fontSize: 12,
     fontFamily: 'monospace',
+    color: AppColors.textSecondary,
+  },
+
+  usageFooter: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  planBadge: {
+    backgroundColor: AppColors.surfaceSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: '600',
     color: AppColors.textSecondary,
   },
 

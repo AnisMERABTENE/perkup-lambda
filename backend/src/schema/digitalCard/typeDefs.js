@@ -25,16 +25,35 @@ const digitalCardTypeDefs = `
   type SecurityInfo {
     tokenRotates: String!
     currentlyValid: String!
+    lastValidation: String
   }
   
   type CardUsage {
     totalScans: Int!
+    totalSavings: Float!
     recentUsage: [RecentUsage!]!
   }
   
   type RecentUsage {
     usedAt: String!
     token: String!
+    partner: UsagePartner
+    amounts: UsageAmount!
+    plan: String!
+  }
+
+  type UsagePartner {
+    id: ID
+    name: String
+    category: String
+    address: String
+  }
+
+  type UsageAmount {
+    original: Float!
+    discount: Float!
+    final: Float!
+    savings: Float!
   }
   
   type CardUsageResponse {

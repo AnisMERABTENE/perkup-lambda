@@ -96,6 +96,11 @@ export const getMyDigitalCardHandler = async (event) => {
     // Récupérer les informations utilisateur
     const userData = await UserCache.getUser(userId);
     
+    const lastUsedEntry = digitalCard.tokenHistory
+      ?.filter(entry => entry.isUsed && entry.usedAt)
+      ?.sort((a, b) => new Date(a.usedAt) - new Date(b.usedAt))
+      ?.slice(-1)[0];
+
     return {
       card: {
         cardNumber: digitalCard.cardNumber,
@@ -112,8 +117,9 @@ export const getMyDigitalCardHandler = async (event) => {
       },
       instructions: 'Présentez ce QR code au vendeur pour bénéficier de votre réduction',
       security: {
-        tokenRotates: `Toutes les ${TOTP_WINDOW} secondes (2 minutes)`,
-        currentlyValid: `${Math.ceil(timeUntilRotation)} secondes restantes`
+        tokenRotates: `Toutes les ${TOTP_WINDOW} secondes (${Math.round(TOTP_WINDOW / 60)} minutes)`,
+        currentlyValid: `${Math.ceil(timeUntilRotation)} secondes restantes`,
+        lastValidation: lastUsedEntry?.usedAt ? new Date(lastUsedEntry.usedAt).toISOString() : null
       }
     };
   } catch (error) {
@@ -162,10 +168,27 @@ export const getCardUsageHistoryHandler = async (event) => {
     if (!digitalCard) {
       throw new Error('Aucune carte digitale trouvée');
     }
+
+    const [recentCoupons, totalCoupons, totalSavings] = await Promise.all([
+      Coupon.find({ user: userId, digitalCardValidation: true })
+        .sort({ usedAt: -1 })
+        .limit(10)
+        .populate('partner'),
+      Coupon.countDocuments({ user: userId, digitalCardValidation: true }),
+      Coupon.aggregate([
+        { $match: { user: digitalCard.user, digitalCardValidation: true } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ['$discountAmount', 0] } } } }
+      ])
+    ]);
+
+    const totalSavingsValue = totalSavings?.[0]?.total || 0;
     
-    // Récupérer les tokens utilisés
-    const usedTokens = digitalCard.tokenHistory.filter(t => t.isUsed);
-    
+    const timeSinceRotation = (Date.now() - digitalCard.lastRotation) / 1000;
+    const timeUntilRotation = Math.max(0, TOTP_WINDOW - timeSinceRotation);
+    const lastValidationDate = recentCoupons[0]?.usedAt
+      ? new Date(recentCoupons[0].usedAt).toISOString()
+      : null;
+
     return {
       card: {
         cardNumber: digitalCard.cardNumber,
@@ -173,15 +196,38 @@ export const getCardUsageHistoryHandler = async (event) => {
         isActive: digitalCard.isActive
       },
       usage: {
-        totalScans: usedTokens.length,
-        recentUsage: usedTokens.slice(-10).map(t => ({
-          usedAt: t.usedAt,
-          token: t.token.replace(/./g, '*').slice(0, -2) + t.token.slice(-2) // Masquer partiellement
-        }))
+        totalScans: totalCoupons,
+        totalSavings: totalSavingsValue,
+        recentUsage: recentCoupons.map((coupon) => {
+          const maskedToken = coupon.qrCode
+            ? coupon.qrCode.replace(/.(?=.{2})/g, '*')
+            : '********';
+          const partnerDoc = coupon.partner;
+          return {
+            usedAt: coupon.usedAt || coupon.updatedAt,
+            token: maskedToken,
+            partner: partnerDoc
+              ? {
+                  id: partnerDoc._id?.toString?.() || null,
+                  name: partnerDoc.name,
+                  category: partnerDoc.category,
+                  address: partnerDoc.address
+                }
+              : null,
+            amounts: {
+              original: coupon.originalAmount || 0,
+              discount: coupon.discountAmount || 0,
+              final: coupon.finalAmount || 0,
+              savings: coupon.discountAmount || 0
+            },
+            plan: coupon.metadata?.userPlan || 'inconnu'
+          };
+        })
       },
       security: {
-        lastRotation: digitalCard.lastRotation,
-        rotationInterval: `${TOTP_WINDOW} secondes (2 minutes)`
+        tokenRotates: `Toutes les ${TOTP_WINDOW} secondes (${Math.round(TOTP_WINDOW / 60)} minutes)`,
+        currentlyValid: `${Math.ceil(timeUntilRotation)} secondes restantes`,
+        lastValidation: lastValidationDate
       }
     };
   } catch (error) {

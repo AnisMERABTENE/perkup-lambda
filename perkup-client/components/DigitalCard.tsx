@@ -72,23 +72,28 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
   }, []);
 
   const refreshQrCode = useCallback(async () => {
-    if (isRefreshingRef.current) return;
+    if (isRefreshingRef.current) return null;
     isRefreshingRef.current = true;
     try {
-      await refetchCard();
+      const result = await refetchCard();
+      return result?.data?.getMyDigitalCard?.card?.timeUntilRotation ?? null;
     } catch (refreshError) {
       console.error('❌ Erreur refresh QR:', refreshError);
+      return null;
     } finally {
       isRefreshingRef.current = false;
     }
   }, [refetchCard]);
 
-  const startTimer = useCallback(() => {
+  const startTimer = useCallback((initialDuration?: number | null) => {
     if (isTimerRunning) return;
-    const initial = qrTimeLeft ?? normalizedInitialDuration();
+    const initial =
+      typeof initialDuration === 'number' && initialDuration > 0
+        ? initialDuration
+        : normalizedInitialDuration();
     setQrTimeLeft(initial);
     setIsTimerRunning(true);
-  }, [isTimerRunning, qrTimeLeft, normalizedInitialDuration]);
+  }, [isTimerRunning, normalizedInitialDuration]);
 
   useEffect(() => {
     if (!isTimerRunning) {
@@ -103,7 +108,6 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
       setQrTimeLeft(prev => {
         if (prev === null) return null;
         if (prev <= 1) {
-          refreshQrCode();
           return 0;
         }
         return prev - 1;
@@ -116,19 +120,17 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
         intervalRef.current = null;
       }
     };
-  }, [isTimerRunning, refreshQrCode]);
+  }, [isTimerRunning]);
 
   useEffect(() => {
     if (!isTimerRunning) return;
-    const nextDuration = normalizedInitialDuration();
-    setQrTimeLeft(nextDuration);
-  }, [
-    isTimerRunning,
-    normalizedInitialDuration,
-    cardData?.card?.qrCode,
-    cardData?.card?.qrCodeData,
-    cardData?.card?.timeUntilRotation
-  ]);
+    if (qrTimeLeft === 0) {
+      stopTimer();
+      if (showQR) {
+        setShowQR(false);
+      }
+    }
+  }, [qrTimeLeft, isTimerRunning, showQR, stopTimer]);
 
   useEffect(() => {
     if (!subscriptionStatus?.isActive) {
@@ -187,7 +189,15 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     }).start();
 
     if (!showQR && subscriptionStatus?.isActive) {
-      startTimer();
+      if (!isTimerRunning || (qrTimeLeft ?? 0) <= 0) {
+        let duration: number | null = null;
+        try {
+          duration = await refreshQrCode();
+        } catch (error) {
+          console.error('❌ Erreur génération QR:', error);
+        }
+        startTimer(duration);
+      }
     }
 
     setShowQR(prev => !prev);
@@ -349,12 +359,12 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
                 <View style={styles.countdownContainer}>
                   <Ionicons name="time" size={16} color={AppColors.textLight} />
                   <Text style={styles.countdownText}>
-                    Nouveau code dans {Math.max(0, qrTimeLeft ?? normalizedInitialDuration())}s
+                    {qrTimeLeft === 0 ? 'Code expiré' : `Nouveau code dans ${Math.max(0, qrTimeLeft ?? normalizedInitialDuration())}s`}
                   </Text>
                 </View>
 
                 <Text style={styles.qrInstructions}>
-                  {cardData.instructions || 'Présentez ce code au vendeur pour obtenir votre réduction'}
+                  {qrTimeLeft === 0 ? 'Code expiré. Appuyez sur la carte pour générer un nouveau QR.' : (cardData.instructions || 'Présentez ce code au vendeur pour obtenir votre réduction')}
                 </Text>
               </View>
             ) : (

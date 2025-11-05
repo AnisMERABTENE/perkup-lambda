@@ -3,6 +3,7 @@ import Coupon from '../../models/Coupon.js';
 import Partner from '../../models/Partner.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
+import websocketService from '../../services/websocketService.js';
 import { 
   validateTOTP, 
   calculateUserDiscount,
@@ -107,6 +108,7 @@ export const validateDigitalCardHandler = async (event) => {
     await digitalCard.save();
     
     // Créer un coupon pour l'historique client
+    let couponDoc = null;
     try {
       console.log('Création coupon automatique pour validation carte digitale');
       
@@ -133,11 +135,42 @@ export const validateDigitalCardHandler = async (event) => {
         }
       });
       
-      await coupon.save();
+      couponDoc = await coupon.save();
       console.log(`Coupon créé automatiquement: ${coupon.code} pour historique client`);
     } catch (couponError) {
       console.error('Erreur création coupon automatique:', couponError);
       // Ne pas faire échouer la validation même si le coupon échoue
+    }
+
+    try {
+      const userIdString = digitalCard.user._id.toString();
+
+      await Promise.all([
+        SubscriptionCache.invalidateSubscription(userIdString),
+        UserCache.invalidateAllUserCache(userIdString, digitalCard.user.email)
+      ]);
+
+      await websocketService.notifyUser(userIdString, {
+        type: 'coupon_validated',
+        coupon: {
+          id: couponDoc?._id?.toString?.() || null,
+          partner: partnerInfo,
+          discount: {
+            offered: partnerDiscount,
+            applied: finalDiscount
+          },
+          amounts: {
+            original: amounts.original,
+            discount: amounts.discountAmount,
+            final: amounts.finalAmount,
+            savings: amounts.discountAmount
+          },
+          plan: userPlan,
+          usedAt: new Date().toISOString()
+        }
+      });
+    } catch (notifyError) {
+      console.error('❌ Erreur notification coupon:', notifyError);
     }
     
     console.log(`Carte validée: ${digitalCard.cardNumber} - Réduction: ${finalDiscount}%`);
