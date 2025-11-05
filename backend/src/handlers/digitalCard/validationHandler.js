@@ -77,20 +77,21 @@ export const validateDigitalCardHandler = async (event) => {
     // Si partnerId fourni, récupérer la réduction du partenaire
     if (partnerId) {
       const partner = await Partner.findById(partnerId);
-      if (partner && partner.isActive) {
-        partnerDiscount = partner.discount;
-        partnerInfo = {
-          id: partner._id,
-          name: partner.name,
-          category: partner.category,
-          address: partner.address
-        };
-        
-        // Vérifier que le vendeur peut utiliser ce partenaire
-        if (partner.owner && partner.owner.toString() !== vendorId) {
-          console.warn(`Vendeur ${vendorId} utilise un partenaire qui ne lui appartient pas: ${partnerId}`);
-        }
+      if (!partner || !partner.isActive) {
+        throw new Error('Partenaire invalide ou inactif');
       }
+
+      if (partner.owner && partner.owner.toString() !== vendorId) {
+        throw new Error('Vous ne pouvez valider qu\'avec vos propres partenaires');
+      }
+
+      partnerDiscount = partner.discount;
+      partnerInfo = {
+        id: partner._id,
+        name: partner.name,
+        category: partner.category,
+        address: partner.address
+      };
     }
     
     // Appliquer le plafond selon le plan

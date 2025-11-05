@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 // 🔑 Clés de stockage
 const STORAGE_KEYS = {
@@ -10,7 +11,7 @@ const STORAGE_KEYS = {
 // 💾 Sauvegarder le token d'authentification
 export const saveAuthToken = async (token: string): Promise<void> => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+    await SecureStore.setItemAsync(STORAGE_KEYS.AUTH_TOKEN, token);
   } catch (error) {
     console.error('Erreur sauvegarde token:', error);
     throw new Error('Impossible de sauvegarder le token');
@@ -20,7 +21,7 @@ export const saveAuthToken = async (token: string): Promise<void> => {
 // 🔍 Récupérer le token d'authentification
 export const getAuthToken = async (): Promise<string | null> => {
   try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    return await SecureStore.getItemAsync(STORAGE_KEYS.AUTH_TOKEN);
   } catch (error) {
     console.error('Erreur récupération token:', error);
     return null;
@@ -30,7 +31,7 @@ export const getAuthToken = async (): Promise<string | null> => {
 // 🗑️ Supprimer le token d'authentification
 export const removeAuthToken = async (): Promise<void> => {
   try {
-    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.AUTH_TOKEN);
   } catch (error) {
     console.error('Erreur suppression token:', error);
   }
