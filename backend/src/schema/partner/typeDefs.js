@@ -8,6 +8,7 @@ const partnerTypeDefs = `
   type Partner {
     id: ID!
     name: String!
+    slug: String
     category: String!
     address: String!
     city: String!
@@ -31,6 +32,7 @@ const partnerTypeDefs = `
   type PartnerDetail {
     id: ID!
     name: String!
+    slug: String
     category: String!
     address: String!
     city: String!

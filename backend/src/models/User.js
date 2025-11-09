@@ -19,6 +19,11 @@ const userSchema = new mongoose.Schema({
     endDate: Date, // Pour compatibilité ancien système
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
+  },
+  notificationsEnabled: { type: Boolean, default: false },
+  pushTokens: {
+    type: [String],
+    default: []
   }
 }, {
   timestamps: true

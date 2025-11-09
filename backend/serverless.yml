@@ -58,6 +58,7 @@ provider:
     CONNECTION_POOL_SIZE: 100
     CACHE_STRATEGY: multi_layer
     MONITORING_ENABLED: true
+    EXPO_ACCESS_TOKEN: ${env:EXPO_ACCESS_TOKEN}
     
     # Rate limiting sécurisé
     RATE_LIMIT_GLOBAL: 10000  # Réduit pour éviter les abus
@@ -246,7 +247,7 @@ resources:
             Value: perkup-lambda-sg
 
     # Subnet Group pour ElastiCache
-    RedisSubnetGroup:
+    PerkupRedisSubnetGroup:
       Type: AWS::ElastiCache::SubnetGroup
       Properties:
         Description: Subnet group for Redis cluster
@@ -264,7 +265,7 @@ resources:
         Port: 6379
         VpcSecurityGroupIds:
           - !Ref RedisSecurityGroup
-        CacheSubnetGroupName: !Ref RedisSubnetGroup
+        CacheSubnetGroupName: !Ref PerkupRedisSubnetGroup
         Tags:
           - Key: Name
             Value: perkup-redis

@@ -6,6 +6,7 @@ import partnerResolvers from './partner/resolvers.js';
 import vendorResolvers from './vendor/resolvers.js';
 import digitalCardResolvers from './digitalCard/resolvers.js';
 import couponResolvers from './coupon/resolvers.js';
+import notificationResolvers from './notification/resolvers.js';
 
 // Fonction utilitaire pour fusionner les résolveurs
 const mergeResolvers = (resolversArray) => {
@@ -44,7 +45,8 @@ const resolvers = mergeResolvers([
   partnerResolvers,
   vendorResolvers,
   digitalCardResolvers,
-  couponResolvers
+  couponResolvers,
+  notificationResolvers
 ]);
 
 export default resolvers;

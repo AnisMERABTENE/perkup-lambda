@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useMutation } from '@apollo/client/react';
-import { Alert } from 'react-native';
+import { Alert, DeviceEventEmitter } from 'react-native';
 import { router } from 'expo-router';
 
 import { 
@@ -80,6 +80,12 @@ export const useAuth = (): UseAuthReturn => {
         await preloadVendorData(user.id);
 
         console.log('✅ Connexion vendeur réussie:', user.email);
+
+        DeviceEventEmitter.emit('authStateChanged', {
+          type: 'login',
+          user,
+          token,
+        });
 
         // ✅ Redirection intelligente selon l'état du vendeur
         Alert.alert('Connexion réussie', message, [
@@ -168,6 +174,7 @@ export const useAuth = (): UseAuthReturn => {
       await clearAuthData();
       
       console.log('✅ Déconnexion vendeur terminée');
+      DeviceEventEmitter.emit('authStateChanged', { type: 'logout' });
       
       // Redirection vers login
       router.replace('/(auth)/login');

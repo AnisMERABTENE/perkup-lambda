@@ -39,6 +39,7 @@ export const LOGIN = gql`
         lastname
         email
         role
+        pushNotificationsEnabled
       }
       needsSetup
       redirectTo
@@ -74,6 +75,7 @@ export const ME_QUERY = gql`
       lastname
       email
       role
+      pushNotificationsEnabled
       subscription {
         plan
         status
@@ -102,6 +104,7 @@ export interface LoginResponse {
       lastname: string;
       email: string;
       role: string;
+      pushNotificationsEnabled: boolean;
     };
     needsSetup: boolean;
     redirectTo: string;
@@ -115,6 +118,7 @@ export interface MeResponse {
     lastname: string;
     email: string;
     role: string;
+    pushNotificationsEnabled: boolean;
     subscription: {
       plan: string;
       status: string;

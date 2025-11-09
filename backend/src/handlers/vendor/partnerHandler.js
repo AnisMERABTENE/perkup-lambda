@@ -4,6 +4,12 @@ import { SubscriptionCache } from '../../services/cache/strategies/subscriptionC
 import cacheService from '../../services/cache/cacheService.js';
 import websocketService from '../../services/websocketService.js';
 import formatPartnerForNotification from '../../utils/partnerFormatter.js';
+import pushNotificationService from '../../services/pushNotificationService.js';
+import { buildPartnerSlug } from '../../utils/partnerSlug.js';
+import { 
+  buildPartnerDetailCacheKeys, 
+  invalidatePartnerDetailCaches 
+} from '../../utils/partnerCacheInvalidation.js';
 
 // Fonction utilitaire pour calculer la distance
 const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -66,6 +72,7 @@ export const searchPartnersHandler = async (event) => {
       return {
         id: partner._id,
         name: partner.name,
+        slug: buildPartnerSlug(partner.name),
         category: partner.category,
         address: partner.address,
         city: partner.city,
@@ -165,6 +172,7 @@ export const getPartnersHandler = async (event) => {
       return {
         id: partner._id,
         name: partner.name,
+        slug: buildPartnerSlug(partner.name),
         category: partner.category,
         address: partner.address,
         city: partner.city,
@@ -269,6 +277,7 @@ export const getPartnerHandler = async (event) => {
         const partnerDetail = {
           id: partner._id,
           name: partner.name,
+          slug: buildPartnerSlug(partner.name),
           category: partner.category,
           address: partner.address,
           city: partner.city,
@@ -320,8 +329,15 @@ export const getPartnerHandler = async (event) => {
       cachedPartnerDetail._cacheInfo.source = 'SHARED_CACHE_HIT';
       cachedPartnerDetail._cacheInfo.retrievedAt = new Date().toISOString();
     }
-    
-    console.log(`✅ Partner detail ${id} pour plan ${userPlan} retourné`);
+
+    console.log('📦 Détail partenaire renvoyé', {
+      partnerId: id,
+      userPlan,
+      offeredDiscount: cachedPartnerDetail.offeredDiscount,
+      userDiscount: cachedPartnerDetail.userDiscount,
+      cacheSource: cachedPartnerDetail._cacheInfo?.source,
+      cacheKey: cachedPartnerDetail._cacheInfo?.cacheKey
+    });
     
     return cachedPartnerDetail;
     
@@ -436,9 +452,15 @@ export const createPartnerHandler = async (event) => {
 
     const formattedPartner = formatPartnerForNotification(newPartner);
     
+    const partnerSlug = buildPartnerSlug(newPartner.name);
+
     // 🔥 INVALIDATION CACHE
     await PartnerCache.invalidateCache();
     await cacheService.invalidateGroup('partners');
+    await invalidatePartnerDetailCaches([
+      newPartner._id.toString(),
+      partnerSlug
+    ]);
     
     // 🚀 NOTIFICATION WEBSOCKET - Nouveau partenaire créé
     await websocketService.notifyPartnerChange(
@@ -455,13 +477,24 @@ export const createPartnerHandler = async (event) => {
       newPartner.city,
       newPartner.category
     );
+
+    await pushNotificationService.notifyPartnerChange({
+      action: 'created',
+      partner: formattedPartner
+    });
     
     // 🔄 NOTIFICATION INVALIDATION CACHE
-    await websocketService.notifyCacheInvalidation([
+    const cacheKeys = [
       'all_partners',
       `category:${newPartner.category}`,
-      `city:${newPartner.city}`
-    ]);
+      `city:${newPartner.city}`,
+    ];
+    const detailKeys = [
+      ...buildPartnerDetailCacheKeys(newPartner._id.toString()),
+      ...(partnerSlug ? buildPartnerDetailCacheKeys(partnerSlug) : [])
+    ];
+    cacheKeys.push(...detailKeys);
+    await websocketService.notifyCacheInvalidation(cacheKeys);
     
     console.log('📡 Notifications WebSocket envoyées pour nouveau partenaire');
     
@@ -535,12 +568,23 @@ export const updatePartnerHandler = async (event) => {
     
     console.log('✅ Partenaire mis à jour:', id);
     
+    const formattedPartner = formatPartnerForNotification(updatedPartner);
+    const updatedSlug = buildPartnerSlug(updatedPartner.name);
+    const previousSlug = buildPartnerSlug(previousSnapshot?.name);
+    
+    const vendorOwner = updatedPartner.owner?.toString?.() || existingPartner.owner?.toString();
+    
     // 🔥 INVALIDATION CACHE
-    await PartnerCache.invalidatePartner(id);
+    await PartnerCache.invalidatePartner(id, vendorOwner, updatedPartner.name, previousSnapshot?.name);
     await PartnerCache.invalidateCache();
     await cacheService.invalidateGroup('partners');
-    
-    const formattedPartner = formatPartnerForNotification(updatedPartner);
+    const detailTargets = [
+      id,
+      updatedSlug,
+      previousSlug && previousSlug !== updatedSlug ? previousSlug : null
+    ];
+    await invalidatePartnerDetailCaches(detailTargets);
+    console.log('🧹 Invalidation caches détail dans updatePartnerHandler', detailTargets.filter(Boolean));
     
     // 🚀 NOTIFICATION WEBSOCKET - Partenaire modifié
     await websocketService.notifyPartnerChange(
@@ -563,15 +607,27 @@ export const updatePartnerHandler = async (event) => {
         updatedPartner.category
       );
     }
+
+    await pushNotificationService.notifyPartnerChange({
+      action: 'updated',
+      partner: formattedPartner,
+      previous: previousSnapshot
+    });
     
     // 🔄 NOTIFICATION INVALIDATION CACHE
-    await websocketService.notifyCacheInvalidation([
+    const cacheKeys = [
       `partner:${id}`,
       'all_partners',
       `category:${updatedPartner.category}`,
-      `city:${updatedPartner.city}`,
-      `partner_detail:${id}:*` // Invalider tous les caches de détail pour ce partenaire
-    ]);
+      `city:${updatedPartner.city}`
+    ];
+    const detailKeys = [
+      ...buildPartnerDetailCacheKeys(id),
+      ...(updatedSlug ? buildPartnerDetailCacheKeys(updatedSlug) : []),
+      ...(previousSlug && previousSlug !== updatedSlug ? buildPartnerDetailCacheKeys(previousSlug) : [])
+    ];
+    cacheKeys.push(...detailKeys);
+    await websocketService.notifyCacheInvalidation(cacheKeys);
     
     console.log('📡 Notifications WebSocket envoyées pour mise à jour partenaire');
     
@@ -621,13 +677,16 @@ export const deletePartnerHandler = async (event) => {
     
     console.log('✅ Partenaire supprimé:', id);
     
-    // 🔥 INVALIDATION CACHE COMPLÈTE
-    await PartnerCache.invalidatePartner(id);
-    await PartnerCache.invalidateCache();
-    await cacheService.invalidateGroup('partners');
-    
     const formattedPartner = formatPartnerForNotification(partner);
     const deletedAt = new Date().toISOString();
+    const partnerSlug = buildPartnerSlug(partner.name);
+
+    // 🔥 INVALIDATION CACHE COMPLÈTE
+    await PartnerCache.invalidatePartner(id, partner.owner?.toString?.(), partner.name);
+    await PartnerCache.invalidateCache();
+    await cacheService.invalidateGroup('partners');
+    await invalidatePartnerDetailCaches([id, partnerSlug]);
+    console.log('🧹 Invalidation caches détail dans deletePartnerHandler', [id, partnerSlug].filter(Boolean));
 
     // 🚀 NOTIFICATION WEBSOCKET - Partenaire supprimé
     await websocketService.notifyPartnerChange(
@@ -653,12 +712,18 @@ export const deletePartnerHandler = async (event) => {
     );
     
     // 🔄 NOTIFICATION INVALIDATION CACHE
-    await websocketService.notifyCacheInvalidation([
+    const cacheKeys = [
       `partner:${id}`,
       'all_partners',
       `category:${partner.category}`,
       `city:${partner.city}`
-    ]);
+    ];
+    const detailKeys = [
+      ...buildPartnerDetailCacheKeys(id),
+      ...(partnerSlug ? buildPartnerDetailCacheKeys(partnerSlug) : [])
+    ];
+    cacheKeys.push(...detailKeys);
+    await websocketService.notifyCacheInvalidation(cacheKeys);
     
     console.log('📡 Notifications WebSocket envoyées pour suppression partenaire');
     

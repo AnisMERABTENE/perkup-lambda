@@ -2,11 +2,14 @@
  * Normalize a partner mongoose document or plain object for websocket notifications.
  * Ensures consistent shape with frontend GraphQL expectations.
  */
+import { buildPartnerSlug } from './partnerSlug.js';
+
 export const formatPartnerForNotification = (partner) => {
   if (!partner) return null;
 
   const source = typeof partner.toObject === 'function' ? partner.toObject() : { ...partner };
   const id = (source._id || source.id)?.toString?.() || source.id;
+  const slug = buildPartnerSlug(source.name);
 
   const hasCoordinates = Array.isArray(source.location?.coordinates) && source.location.coordinates.length === 2;
   const latitude = hasCoordinates ? Number(source.location.coordinates[1]) : source.location?.latitude;
@@ -30,6 +33,7 @@ export const formatPartnerForNotification = (partner) => {
     logo: source.logo || null,
     website: source.website || null,
     isActive: source.isActive !== undefined ? source.isActive : true,
+    slug,
     createdAt,
     updatedAt,
     location: latitude != null && longitude != null ? {

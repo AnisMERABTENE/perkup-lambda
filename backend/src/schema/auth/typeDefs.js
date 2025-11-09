@@ -26,6 +26,7 @@ const authTypeDefs = `
     role: String!
     isVerified: Boolean!
     subscription: Subscription
+    pushNotificationsEnabled: Boolean!
   }
 
   type MessageResponse {

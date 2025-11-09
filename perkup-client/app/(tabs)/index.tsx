@@ -158,7 +158,9 @@ export default function PartnersScreen() {
     return filteredPartners.filter(partner => {
       const key = partner.id
         ? `id:${partner.id}`
-        : `slug:${partner.name.toLowerCase()}::${partner.city?.toLowerCase() || ''}`;
+        : partner.slug
+          ? `slug:${partner.slug}`
+          : `name:${partner.name.toLowerCase()}::${partner.city?.toLowerCase() || ''}`;
       if (seen.has(key)) {
         return false;
       }
@@ -213,9 +215,18 @@ export default function PartnersScreen() {
       <TouchableOpacity
         style={styles.partnerCard}
         onPress={() => {
-          // 🎯 UTILISER LE NOM COMME SLUG (système qui marche déjà)
-          const slug = partner.name.toLowerCase().replace(/\s+/g, '-');
-          router.push(`/partner/${encodeURIComponent(slug)}`);
+          if (!partner.id) {
+            console.warn('⚠️ Partner sans identifiant, navigation bloquée:', partner.name);
+            return;
+          }
+          console.log('🧭 Navigation vers détail partenaire', {
+            id: partner.id,
+            name: partner.name,
+            offeredDiscount: partner.offeredDiscount,
+            userDiscount: partner.userDiscount,
+            userPlan
+          });
+          router.push(`/partner/${encodeURIComponent(partner.id)}`);
         }}
         activeOpacity={0.7}
       >

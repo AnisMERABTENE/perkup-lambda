@@ -5,6 +5,7 @@ interface UseWebSocketReturn {
   connected: boolean;
   lastMessage: any;
   partnerUpdates: any[];
+  partnerSnapshots: Record<string, any>;
   sendMessage: (message: any) => void;
   subscribe: (topics: string[]) => void;
   unsubscribe: (topics: string[]) => void;
@@ -23,6 +24,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
   const [connected, setConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
   const [partnerUpdates, setPartnerUpdates] = useState<any[]>([]);
+  const [partnerSnapshots, setPartnerSnapshots] = useState<Record<string, any>>({});
 
   useEffect(() => {
     // Listeners WebSocket
@@ -48,6 +50,17 @@ export const useWebSocket = (): UseWebSocketReturn => {
         const filtered = prev.filter(item => item.id !== normalizedId);
         return [normalizedUpdate, ...filtered].slice(0, 10);
       }); // Garder 10 dernières mises à jour uniques
+
+      if (update?.partner?.id) {
+        setPartnerSnapshots(prev => {
+          const next = { ...prev, [String(update.partner.id)]: update.partner };
+          const keys = Object.keys(next);
+          if (keys.length > 50) {
+            delete next[keys[0]];
+          }
+          return next;
+        });
+      }
     });
 
     const unsubscribeCacheInvalidated = wsClient.on('cache_invalidated', (keys: string[]) => {
@@ -86,6 +99,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
     connected,
     lastMessage,
     partnerUpdates,
+    partnerSnapshots,
     sendMessage,
     subscribe,
     unsubscribe,
@@ -98,7 +112,7 @@ export const useWebSocket = (): UseWebSocketReturn => {
  * Auto-subscription aux mises à jour de partners
  */
 export const usePartnerUpdates = (city?: string, category?: string) => {
-  const { connected, partnerUpdates, subscribe, unsubscribe } = useWebSocket();
+  const { connected, partnerUpdates, partnerSnapshots, subscribe, unsubscribe } = useWebSocket();
   const [relevantUpdates, setRelevantUpdates] = useState<any[]>([]);
   const [pendingRefetchIds, setPendingRefetchIds] = useState<string[]>([]);
 
@@ -180,7 +194,8 @@ export const usePartnerUpdates = (city?: string, category?: string) => {
     updates: relevantUpdates,
     hasNewUpdates: refetchUpdates.length > 0,
     refetchUpdates,
-    acknowledgeUpdates
+    acknowledgeUpdates,
+    partnerSnapshots
   };
 };
 

@@ -138,7 +138,9 @@ export default function MapsScreen() {
     return filteredPartners.filter((partner) => {
       const key = partner.id
         ? `id:${partner.id}`
-        : `slug:${partner.name?.toLowerCase()}::${partner.city?.toLowerCase() || ''}`;
+        : partner.slug
+          ? `slug:${partner.slug}`
+          : `name:${partner.name?.toLowerCase()}::${partner.city?.toLowerCase() || ''}`;
       if (seen.has(key)) {
         return false;
       }
@@ -161,7 +163,7 @@ export default function MapsScreen() {
         // UTILISER LES VRAIES COORDONNÉES GPS
         if (partner.location && partner.location.latitude && partner.location.longitude) {
           partnersMarkers.push({
-            id: partner.id || `${partner.name}-${index}`,
+            id: partner.id || partner.slug || `${partner.name}-${index}`,
             name: partner.name,
             category: partner.category,
             address: `${partner.address}, ${partner.city}`,

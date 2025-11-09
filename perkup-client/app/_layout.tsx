@@ -1,13 +1,14 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import 'react-native-reanimated';
 import { ApolloProvider } from '@apollo/client/react';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import * as Notifications from 'expo-notifications';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import apolloClient from '@/graphql/apolloClient';
@@ -30,6 +31,14 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -145,6 +154,32 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleInitialNotification = async () => {
+      const response = await Notifications.getLastNotificationResponseAsync();
+      if (response?.notification.request.content.data?.partnerId) {
+        const partnerId = response.notification.request.content.data.partnerId;
+        router.push(`/partner/${encodeURIComponent(partnerId)}`);
+      }
+    };
+
+    handleInitialNotification().catch((error) =>
+      console.error('❌ Erreur traitement notification initiale:', error)
+    );
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const partnerId = response.notification.request.content.data?.partnerId;
+      if (partnerId) {
+        router.push(`/partner/${encodeURIComponent(partnerId)}`);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [router]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

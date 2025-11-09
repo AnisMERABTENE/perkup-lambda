@@ -2,8 +2,8 @@ import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/clien
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import { RetryLink } from '@apollo/client/link/retry';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, AUTH_CONFIG, CACHE_CONFIG } from '@/constants/Config';
+import { getAuthToken } from '@/utils/storage';
 
 // ✅ URL de votre API GraphQL déployée sur AWS
 const BACKEND_URL = API_CONFIG.GRAPHQL_URL;
@@ -72,16 +72,15 @@ let tokenExpiry: number = 0;
 
 const authLink = setContext(async (_, { headers }) => {
   try {
-    // ✅ Cache token en mémoire pour éviter AsyncStorage répétitif
+    // ✅ Cache token en mémoire pour éviter SecureStore répétitif
     if (!cachedToken || Date.now() > tokenExpiry) {
-      cachedToken = await AsyncStorage.getItem('authToken');
+      cachedToken = await getAuthToken();
       tokenExpiry = Date.now() + 5 * 60 * 1000; // Cache 5min
       
-      // 🔍 DEBUG: Log du token pour diagnostic
       if (cachedToken) {
-        console.log('🔐 Token récupéré:', cachedToken.substring(0, 20) + '...');
+        console.log('🔐 Token récupéré depuis SecureStore:', cachedToken.substring(0, 20) + '...');
       } else {
-        console.log('❌ Aucun token trouvé dans AsyncStorage');
+        console.log('❌ Aucun token d\'authentification disponible');
       }
     }
     
@@ -119,9 +118,19 @@ export const apolloClient = new ApolloClient({
         }
       },
       
-      // 🎯 Partners avec clé composite (pas d'ID unique)
+      // 🎯 Partners identifiés par ID pour éviter les collisions
       Partner: {
-        keyFields: ["name", "city"], // Clé composite
+        keyFields: (obj) => {
+          if (obj?.id) {
+            return obj.id;
+          }
+          if (obj?.slug) {
+            return `slug:${obj.slug}`;
+          }
+          const name = obj?.name?.toLowerCase?.() || 'unknown';
+          const city = obj?.city?.toLowerCase?.() || 'unknown';
+          return `fallback:${name}:${city}`;
+        },
         fields: {
           location: {
             merge: true
@@ -208,9 +217,16 @@ export const evictPartnerListCache = () => {
   apolloClient.cache.gc(); // Garbage collection
 };
 
+export const evictPartnerDetailCache = () => {
+  console.log('🧹 Nettoyage cache partner detail');
+  apolloClient.cache.evict({ fieldName: 'getPartner' });
+  apolloClient.cache.gc();
+};
+
 export const clearPartnersCache = () => {
   evictPartnerListCache();
   evictSearchPartnersCache();
+  evictPartnerDetailCache();
 };
 
 export const clearSubscriptionCache = () => {

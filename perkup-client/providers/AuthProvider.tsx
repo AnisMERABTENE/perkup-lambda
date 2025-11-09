@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, DeviceEventEmitter } from 'react-native';
 import { router } from 'expo-router';
-import { getAuthToken, getUserData, clearAuthData } from '@/utils/storage';
+import { getAuthToken, getUserData, clearAuthData, saveUserData } from '@/utils/storage';
 import { clearAuthCache } from '@/graphql/apolloClient';
 import AppColors from '@/constants/Colors';
+import { wsClient } from '@/services/WebSocketClient';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -11,6 +12,7 @@ interface AuthContextType {
   user: any | null;
   checkAuth: () => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updates: Record<string, any>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -118,6 +120,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Nettoyer les caches
       clearAuthCache();
       await clearAuthData();
+      wsClient.disconnect();
       
       // Réinitialiser l'état
       setIsAuthenticated(false);
@@ -126,6 +129,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('✅ Déconnexion terminée');
     } catch (error) {
       console.error('❌ Erreur déconnexion:', error);
+    }
+  };
+
+  const updateUser = async (updates: Record<string, any>) => {
+    const nextUser = { ...(user || {}), ...updates };
+    setUser(nextUser);
+    try {
+      await saveUserData(nextUser);
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde user (updateUser):', error);
     }
   };
 
@@ -167,6 +180,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      wsClient.connect();
+    } else {
+      wsClient.disconnect();
+    }
+  }, [isAuthenticated]);
 
   // 📱 Affichage de chargement pendant la vérification
   if (isLoading) {
@@ -196,6 +217,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     checkAuth,
     logout,
+    updateUser,
   };
 
   return (

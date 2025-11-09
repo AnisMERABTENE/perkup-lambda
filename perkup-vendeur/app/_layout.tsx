@@ -1,15 +1,21 @@
-import { Slot, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 
 // Apollo client pour GraphQL - Même config que perkup-client
 import { ApolloProvider } from '@apollo/client/react';
 import apolloClient from '@/graphql/apolloClient';
+import { AuthProvider } from '@/providers/AuthProvider';
+import AuthGuard from '@/components/AuthGuard';
 
 export default function RootLayout() {
   return (
     <ApolloProvider client={apolloClient}>
-      <RootLayoutNav />
+      <AuthProvider>
+        <AuthGuard>
+          <RootLayoutNav />
+        </AuthGuard>
+      </AuthProvider>
     </ApolloProvider>
   );
 }

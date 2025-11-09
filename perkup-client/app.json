@@ -25,7 +25,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -48,10 +54,18 @@
         }
       ],
       "expo-barcode-scanner",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "afcd2014-beb0-4337-8430-297e8a6ff492"
+      }
+    },
+    "owner": "anis144"
   }
 }

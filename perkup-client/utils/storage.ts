@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   AUTH_TOKEN: 'authToken',
   USER_DATA: 'userData',
   REMEMBER_EMAIL: 'rememberEmail',
+  PUSH_TOKEN: 'pushToken',
 } as const;
 
 // 💾 Sauvegarder le token d'authentification
@@ -91,6 +92,7 @@ export const clearAuthData = async (): Promise<void> => {
     await Promise.all([
       removeAuthToken(),
       removeUserData(),
+      removePushToken(),
     ]);
   } catch (error) {
     console.error('Erreur nettoyage données auth:', error);
@@ -104,5 +106,31 @@ export const isUserAuthenticated = async (): Promise<boolean> => {
     return !!token;
   } catch (error) {
     return false;
+  }
+};
+
+// 🔔 Token push Expo
+export const savePushToken = async (token: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, token);
+  } catch (error) {
+    console.error('Erreur sauvegarde push token:', error);
+  }
+};
+
+export const getPushToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKEN);
+  } catch (error) {
+    console.error('Erreur récupération push token:', error);
+    return null;
+  }
+};
+
+export const removePushToken = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.PUSH_TOKEN);
+  } catch (error) {
+    console.error('Erreur suppression push token:', error);
   }
 };

@@ -14,7 +14,8 @@ const authResolvers = {
         email: userData.email,
         role: userData.role,
         isVerified: userData.isVerified,
-        subscription: userData.subscription
+        subscription: userData.subscription,
+        pushNotificationsEnabled: userData.notificationsEnabled || false
       };
     })
   },

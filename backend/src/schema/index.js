@@ -6,6 +6,7 @@ import partnerTypeDefs from './partner/typeDefs.js';
 import vendorTypeDefs from './vendor/typeDefs.js';
 import digitalCardTypeDefs from './digitalCard/typeDefs.js';
 import couponTypeDefs from './coupon/typeDefs.js';
+import notificationTypeDefs from './notification/typeDefs.js';
 
 // Assemblage de tous les types
 const typeDefs = [
@@ -15,7 +16,8 @@ const typeDefs = [
   partnerTypeDefs,
   vendorTypeDefs,
   digitalCardTypeDefs,
-  couponTypeDefs
+  couponTypeDefs,
+  notificationTypeDefs
 ];
 
 export default typeDefs;

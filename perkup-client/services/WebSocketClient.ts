@@ -1,14 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuthToken } from '@/utils/storage';
 import { 
   apolloClient, 
   clearPartnersCache, 
   clearSubscriptionCache, 
-  evictPartnerListCache, 
-  evictSearchPartnersCache, 
   refreshSubscriptionData 
 } from '@/graphql/apolloClient';
 import { API_CONFIG, WEBSOCKET_CONFIG } from '@/constants/Config';
 import { GET_PARTNERS, PartnersResponse } from '@/graphql/queries/partners';
+import { smartApollo } from '@/services/SmartApolloWrapper';
 
 interface PartnerLocationPayload {
   latitude: number;
@@ -17,6 +16,7 @@ interface PartnerLocationPayload {
 
 interface NormalizedPartner {
   id?: string;
+  slug?: string;
   name?: string;
   category?: string;
   address?: string;
@@ -72,6 +72,7 @@ const normalizePartnerPayload = (payload: any): NormalizedPartner | undefined =>
   
   return {
     id: id != null ? String(id) : undefined,
+    slug: payload.slug ?? undefined,
     name: payload.name ?? undefined,
     category: payload.category ?? undefined,
     address: payload.address ?? undefined,
@@ -110,22 +111,33 @@ const matchesPartnerEntry = (entry: any, partner: NormalizedPartner, previous?: 
     return true;
   }
   
-  const entryName = entry.name ? String(entry.name).toLowerCase() : undefined;
-  const entryCity = entry.city ? String(entry.city).toLowerCase() : undefined;
+  const entrySlug = entry.slug ? String(entry.slug).toLowerCase() : undefined;
+  const partnerSlug = partner.slug ? partner.slug.toLowerCase() : undefined;
   
-  if (partner.name && partner.city && entryName === partner.name.toLowerCase() && entryCity === partner.city.toLowerCase()) {
+  if (partnerSlug && entrySlug && entrySlug === partnerSlug) {
     return true;
   }
   
-  if (
-    previous?.name &&
-    previous.city &&
-    entryName === previous.name.toLowerCase() &&
-    entryCity === previous.city.toLowerCase()
-  ) {
-    return true;
+  if (partner.name && partner.city) {
+    const entryName = entry.name ? String(entry.name).toLowerCase() : undefined;
+    const entryCity = entry.city ? String(entry.city).toLowerCase() : undefined;
+    if (entryName === partner.name.toLowerCase() && entryCity === partner.city.toLowerCase()) {
+      return true;
+    }
   }
   
+  if (previous?.name && previous.city) {
+    const entryName = entry.name ? String(entry.name).toLowerCase() : undefined;
+    const entryCity = entry.city ? String(entry.city).toLowerCase() : undefined;
+    if (entryName === previous.name.toLowerCase() && entryCity === previous.city.toLowerCase()) {
+      return true;
+    }
+  }
+  
+  if (entrySlug && previous?.slug && entrySlug === previous.slug.toLowerCase()) {
+    return true;
+  }
+
   return false;
 };
 
@@ -158,6 +170,7 @@ const enrichPartnerForPlan = (
   return {
     __typename: 'Partner',
     id: partner.id ?? existing?.id ?? '',
+    slug: partner.slug ?? existing?.slug ?? '',
     name: partner.name ?? existing?.name ?? '',
     category: partner.category ?? existing?.category ?? '',
     address: partner.address ?? existing?.address ?? '',
@@ -190,6 +203,7 @@ class WebSocketClient {
   private maxReconnectAttempts = WEBSOCKET_CONFIG.MAX_RECONNECT_ATTEMPTS;
   private reconnectInterval = WEBSOCKET_CONFIG.RECONNECT_INTERVAL;
   private pingInterval: NodeJS.Timeout | null = null;
+  private tokenRetryTimeout: NodeJS.Timeout | null = null;
   private subscriptions: string[] = WEBSOCKET_CONFIG.DEFAULT_SUBSCRIPTIONS;
   private listeners: { [eventType: string]: Function[] } = {};
   private isConnecting = false;
@@ -207,13 +221,15 @@ class WebSocketClient {
     }
     
     this.isConnecting = true;
+    this.clearTokenRetry();
     
     try {
       // Récupérer le token d'authentification
-      const token = await AsyncStorage.getItem('authToken');
+      const token = await getAuthToken();
       if (!token) {
         console.log('⚠️ Pas de token, connexion WebSocket ignorée');
         this.isConnecting = false;
+        this.scheduleTokenRetry();
         return;
       }
       
@@ -241,6 +257,7 @@ class WebSocketClient {
   onOpen() {
     console.log('✅ WebSocket connecté');
     this.isConnecting = false;
+    this.clearTokenRetry();
     this.reconnectAttempts = 0;
     
     // S'abonner aux topics
@@ -303,6 +320,7 @@ class WebSocketClient {
     console.log('❌ WebSocket fermé:', event.code, event.reason);
     this.stopPing();
     this.emit('disconnected');
+    this.clearTokenRetry();
     
     // Reconnexion automatique
     if (event.code !== 1000) {
@@ -397,6 +415,27 @@ class WebSocketClient {
     }
   }
   
+  private scheduleTokenRetry() {
+    if (this.tokenRetryTimeout) {
+      return;
+    }
+    
+    const delay = this.reconnectInterval || 5000;
+    console.log(`⏳ En attente d'un token avant reconnexion (${delay}ms)`);
+    
+    this.tokenRetryTimeout = setTimeout(() => {
+      this.tokenRetryTimeout = null;
+      this.connect();
+    }, delay);
+  }
+  
+  private clearTokenRetry() {
+    if (this.tokenRetryTimeout) {
+      clearTimeout(this.tokenRetryTimeout);
+      this.tokenRetryTimeout = null;
+    }
+  }
+  
   /**
    * 🔍 VÉRIFIER CONNEXION
    */
@@ -411,24 +450,8 @@ class WebSocketClient {
     const partnerName = message?.data?.name || 'inconnu';
     console.log(`🏪 Partner ${message.action}:`, partnerName);
     
-    let applied = false;
-    
-    try {
-      applied = this.applyPartnerUpdateToCache(message);
-    } catch (error) {
-      console.error('❌ Erreur application patch cache partner:', error);
-    }
-
-    try {
-      evictSearchPartnersCache();
-    } catch (error) {
-      console.error('❌ Erreur nettoyage cache recherche partners:', error);
-    }
-
-    if (!applied) {
-      console.log('⚠️ Patch cache incomplet, invalidation liste partners');
-      evictPartnerListCache();
-    }
+    const applied = this.applyPartnerUpdateToCache(message);
+    this.invalidateLocalCaches(applied, message.data);
     
     // Notifier les composants intéressés
     this.emit('partner_changed', {
@@ -444,14 +467,24 @@ class WebSocketClient {
 
   private applyPartnerUpdateToCache(message: any): boolean {
     if (!message?.data) {
+      console.log('⚠️ WS update sans data brute, patch ignoré');
       return false;
     }
     
     const action: string = message.action;
     const normalized = normalizePartnerPayload(message.data as PartnerNotificationPayload);
     if (!normalized) {
+      console.log('⚠️ WS update sans id après normalisation, patch ignoré', message.data);
       return false;
     }
+    
+    console.log('🧩 Patch WebSocket reçu', {
+      action,
+      id: normalized.id,
+      name: normalized.name,
+      offeredDiscount: normalized.offeredDiscount ?? normalized.discount,
+      previousOffered: message.data?.previous?.discount ?? message.data?.previous?.offeredDiscount
+    });
     
     const previous = normalizePartnerPayload((message.data as PartnerNotificationPayload)?.previous);
     
@@ -507,6 +540,15 @@ class WebSocketClient {
       const previousInTarget = matchesCategory(previous?.category, targetCategory);
       
       const existingIndex = partners.findIndex((entry: any) => matchesPartnerEntry(entry, partner, previous));
+      
+      if (existingIndex === -1 && partner.id) {
+        console.log('🔎 Aucun partner correspondant dans le cache pour update', {
+          id: partner.id,
+          name: partner.name,
+          targetCategory,
+          listSize: partners.length
+        });
+      }
       let updatedPartners = partners.slice();
       let changed = false;
       
@@ -562,15 +604,79 @@ class WebSocketClient {
    * 🔄 GÉRER INVALIDATION CACHE
    */
   handleCacheInvalidation(message: any) {
-    console.log('🔄 Cache invalidé:', message.keys);
+    const keys: string[] = message.keys || [];
+    console.log('🔄 Cache invalidé:', keys);
     
-    // Nettoyer les caches correspondants
-    if (message.keys.includes('partners') || message.keys.includes('search')) {
-      clearPartnersCache();
+    // Nettoyer toutes les couches locales
+    this.invalidateLocalCaches(false);
+    
+    const detailIdentifiers = keys
+      .filter((key: string) => key.startsWith('partner_detail:'))
+      .map((key: string) => key.replace('partner_detail:', '').replace(/:.*$/, ''));
+    
+    if (detailIdentifiers.length > 0) {
+      this.evictPartnerDetailIdentifiers(detailIdentifiers);
     }
     
     // Notifier pour refresh global
     this.emit('cache_invalidated', message.keys);
+    this.emit('partner_changed', {
+      id: message.timestamp || Date.now(),
+      action: 'cache_invalidated',
+      requiresRefetch: true,
+      partner: null
+    });
+  }
+
+  private evictPartnerDetailCache(partner?: any) {
+    const identifiers = new Set<string>();
+    const collect = (entry?: any) => {
+      if (!entry) return;
+      if (entry.id) identifiers.add(String(entry.id));
+      if (entry.slug) identifiers.add(String(entry.slug));
+    };
+    
+    collect(partner);
+    collect(partner?.previous);
+    
+    if (identifiers.size === 0) return;
+    this.evictPartnerDetailIdentifiers(Array.from(identifiers));
+  }
+
+  private evictPartnerDetailIdentifiers(identifiers: string[]) {
+    identifiers
+      .filter(Boolean)
+      .forEach((identifier) => {
+        try {
+          apolloClient.cache.evict({
+            id: 'ROOT_QUERY',
+            fieldName: 'getPartner',
+            args: { id: identifier }
+          });
+        } catch (error) {
+          console.error('❌ Erreur eviction cache détail:', error);
+        }
+      });
+    apolloClient.cache.gc();
+  }
+
+  private invalidateLocalCaches(applied: boolean, partner?: any) {
+    if (!applied) {
+      try {
+        console.log('🧹 Invalidation complète des caches partenaires (WS)');
+        clearPartnersCache();
+      } catch (error) {
+        console.error('❌ Erreur nettoyage cache partners:', error);
+      }
+      
+      smartApollo.invalidateQueries(['GetPartners', 'SearchPartners']).catch((error) => {
+        console.error('❌ Erreur invalidation smart cache partners:', error);
+      });
+    } else {
+      console.log('✅ Mise à jour appliquée localement, pas de purge complète');
+    }
+    
+    this.evictPartnerDetailCache(partner);
   }
   
   /**
@@ -632,6 +738,8 @@ class WebSocketClient {
   disconnect() {
     console.log('🔌 Fermeture WebSocket');
     this.stopPing();
+    this.clearTokenRetry();
+    this.isConnecting = false;
     
     if (this.ws) {
       this.ws.close(1000, 'Déconnexion volontaire');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -10,6 +10,7 @@ import {
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import AppColors from '@/constants/Colors';
 import { getUserData } from '@/utils/storage';
@@ -24,6 +25,14 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadUserData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
+  const notificationsEnabled = !!userData?.pushNotificationsEnabled;
 
   const loadUserData = async () => {
     try {
@@ -91,9 +100,15 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Préférences</Text>
           
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/profile/notifications')}
+          >
             <Ionicons name="notifications-outline" size={24} color={AppColors.primary} />
             <Text style={styles.menuText}>Notifications</Text>
+            <Text style={styles.menuStatus}>
+              {notificationsEnabled ? 'Activées' : 'Désactivées'}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
           </TouchableOpacity>
 
@@ -199,6 +214,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: AppColors.text,
+  },
+  menuStatus: {
+    fontSize: 14,
+    color: AppColors.textSecondary,
   },
   logoutButton: {
     flexDirection: 'row',

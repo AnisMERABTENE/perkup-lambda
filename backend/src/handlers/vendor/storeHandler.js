@@ -2,10 +2,17 @@ import Partner from '../../models/Partner.js';
 import User from '../../models/User.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { PartnerCache } from '../../services/cache/strategies/partnerCache.js';
+import cacheService from '../../services/cache/cacheService.js';
 import { validateCloudinaryUrl } from '../../services/cloudinaryService.js';
 import GeocodingService from '../../services/geocodingService.js';
 import { websocketService } from '../../services/websocketService.js';
 import formatPartnerForNotification from '../../utils/partnerFormatter.js';
+import pushNotificationService from '../../services/pushNotificationService.js';
+import { buildPartnerSlug } from '../../utils/partnerSlug.js';
+import { 
+  buildPartnerDetailCacheKeys, 
+  invalidatePartnerDetailCaches 
+} from '../../utils/partnerCacheInvalidation.js';
 
 // Créer une boutique
 export const createStoreHandler = async (event) => {
@@ -94,9 +101,23 @@ export const createStoreHandler = async (event) => {
     const formattedStore = formatPartnerForNotification(store);
 
     // 🔥 INVALIDATION CACHE + NOTIFICATION WEBSOCKET TEMPS RÉEL
-    await PartnerCache.invalidatePartner(store._id, userId);
+    await PartnerCache.invalidatePartner(store._id, userId, store.name);
+    await PartnerCache.invalidateCache();
+
+    const storeSlug = buildPartnerSlug(store.name);
+    await invalidatePartnerDetailCaches([
+      store._id.toString(),
+      storeSlug
+    ]);
+    console.log('🧹 Invalidation caches détail dans createStoreHandler', [store._id.toString(), storeSlug].filter(Boolean));
     
     // 📡 Notifier tous les clients en temps réel
+    await websocketService.notifyPartnerChange(
+      store._id.toString(),
+      'created',
+      formattedStore
+    );
+
     await websocketService.notifyPartnerChangeByLocation(
       store._id.toString(),
       'created',
@@ -104,15 +125,27 @@ export const createStoreHandler = async (event) => {
       store.city,
       store.category
     );
+
+    await pushNotificationService.notifyPartnerChange({
+      action: 'created',
+      partner: formattedStore
+    });
     
     // 🔄 Notifier invalidation cache globale
-    await websocketService.notifyCacheInvalidation(['partners', 'search', 'categories']);
+    const cacheKeys = ['partners', 'search', 'categories', `partner:${store._id}`];
+    const detailKeys = [
+      ...buildPartnerDetailCacheKeys(store._id.toString()),
+      ...(storeSlug ? buildPartnerDetailCacheKeys(storeSlug) : [])
+    ];
+    cacheKeys.push(...detailKeys);
+    await websocketService.notifyCacheInvalidation(cacheKeys);
     
     return {
       message: "Boutique créée avec succès",
       store: {
         id: store._id,
         name: store.name,
+        slug: buildPartnerSlug(store.name),
         category: store.category,
         address: store.address,
         city: store.city,
@@ -212,11 +245,37 @@ export const updateStoreHandler = async (event) => {
     console.log(`Boutique modifiée: ${name}`);
     
     const formattedStore = formatPartnerForNotification(updatedStore);
+    const updatedSlug = buildPartnerSlug(updatedStore.name);
+    const previousSlug = buildPartnerSlug(previousSnapshot?.name);
     
     // 🔥 INVALIDATION CACHE + NOTIFICATION WEBSOCKET TEMPS RÉEL
-    await PartnerCache.invalidatePartner(updatedStore._id, userId);
+    await PartnerCache.invalidatePartner(
+      updatedStore._id,
+      userId,
+      updatedStore.name,
+      previousSnapshot?.name
+    );
+    await PartnerCache.invalidateCache();
+
+    const detailTargets = [
+      updatedStore._id.toString(),
+      updatedSlug,
+      previousSlug && previousSlug !== updatedSlug ? previousSlug : null
+    ];
+    await invalidatePartnerDetailCaches(detailTargets);
+    console.log('🧹 Invalidation caches détail dans updateStoreHandler', detailTargets.filter(Boolean));
     
     // 📡 Notifier modification en temps réel
+    await websocketService.notifyPartnerChange(
+      updatedStore._id.toString(),
+      'updated',
+      {
+        ...formattedStore,
+        previous: previousSnapshot,
+        changes: Object.keys(input)
+      }
+    );
+
     await websocketService.notifyPartnerChangeByLocation(
       updatedStore._id.toString(),
       'updated',
@@ -228,15 +287,34 @@ export const updateStoreHandler = async (event) => {
       updatedStore.city,
       updatedStore.category
     );
+
+    await pushNotificationService.notifyPartnerChange({
+      action: 'updated',
+      partner: formattedStore,
+      previous: previousSnapshot
+    });
     
     // 🔄 Notifier invalidation cache
-    await websocketService.notifyCacheInvalidation(['partners', 'search', 'categories']);
+    const cacheKeys = [
+      'partners',
+      'search',
+      'categories',
+      `partner:${updatedStore._id}`
+    ];
+    const detailKeys = [
+      ...buildPartnerDetailCacheKeys(updatedStore._id.toString()),
+      ...(updatedSlug ? buildPartnerDetailCacheKeys(updatedSlug) : []),
+      ...(previousSlug && previousSlug !== updatedSlug ? buildPartnerDetailCacheKeys(previousSlug) : [])
+    ];
+    cacheKeys.push(...detailKeys);
+    await websocketService.notifyCacheInvalidation(cacheKeys);
     
     return {
       message: "Boutique mise à jour avec succès",
       store: {
         id: updatedStore._id,
         name: updatedStore.name,
+        slug: buildPartnerSlug(updatedStore.name),
         category: updatedStore.category,
         address: updatedStore.address,
         city: updatedStore.city,

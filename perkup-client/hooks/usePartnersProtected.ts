@@ -115,6 +115,19 @@ const extractCitiesFromPartners = (list: Partner[] | undefined): string[] => {
   return Array.from(unique);
 };
 
+const getPlanDiscountLimit = (plan?: string) => {
+  switch (plan) {
+    case 'premium':
+      return Number.POSITIVE_INFINITY;
+    case 'super':
+      return 10;
+    case 'basic':
+      return 5;
+    default:
+      return 0;
+  }
+};
+
 /**
  * 🎯 Hook centralisé pour gestion optimisée des partenaires
  * 🔐 PROTECTION AUTHENTIFICATION INTÉGRÉE - VERSION CORRIGÉE
@@ -140,19 +153,32 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   } = options;
   
   // 🚫 PROTECTION CRITIQUE : Si pas authentifié OU pas focus, désactiver TOUTES les requêtes
-  const shouldSkipQueries = !isAuthenticated || authLoading || skipQueries;
+  const shouldSkipPartnersQueries = !isAuthenticated || authLoading || skipQueries;
+  const shouldSkipMetaQueries = !isAuthenticated || authLoading;
   
-  console.log('🔐 usePartnersProtected - Auth:', isAuthenticated, 'Loading:', authLoading, 'Skip:', shouldSkipQueries, 'Focus:', !skipQueries);
+  console.log(
+    '🔐 usePartnersProtected - Auth:',
+    isAuthenticated,
+    'Loading:',
+    authLoading,
+    'SkipPartners:',
+    shouldSkipPartnersQueries,
+    'SkipMeta:',
+    shouldSkipMetaQueries,
+    'Focus:',
+    !skipQueries
+  );
 
   // 🔥 WEBSOCKET TEMPS RÉEL pour auto-refresh (seulement si authentifié ET focus)
-  const { 
+  const {
     connected: wsConnected, 
     updates: partnerUpdates, 
     refetchUpdates, 
-    acknowledgeUpdates 
+    acknowledgeUpdates,
+    partnerSnapshots
   } = usePartnerUpdates(
-    shouldSkipQueries ? undefined : city, 
-    shouldSkipQueries ? undefined : category
+    shouldSkipPartnersQueries ? undefined : city,
+    shouldSkipPartnersQueries ? undefined : category
   );
 
   // 📊 États locaux
@@ -161,6 +187,8 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   const [smartData, setSmartData] = useState<any>(null);
   const [useSmartCache, setUseSmartCache] = useState(enableIntelligentCache);
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
+  const [cachedCategories, setCachedCategories] = useState<Array<{ value: string; label: string }>>([]);
+  const [cachedCities, setCachedCities] = useState<string[]>([]);
 
   // 🔍 Déterminer la stratégie de requête (liste vs recherche)
   const useSearchQuery = !!(lat && lng) || !!city || !!searchQuery;
@@ -173,7 +201,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     refetch: refetchPartners
   } = useQuery<PartnersResponse>(GET_PARTNERS, {
     variables: { category: category || undefined },
-    skip: shouldSkipQueries || useSearchQuery || useSmartCache, // 🚫 PROTECTION CRITIQUE
+    skip: shouldSkipPartnersQueries || useSearchQuery || useSmartCache, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: forceRefresh ? 'network-only' : (enableCache ? 'cache-and-network' : 'network-only'),
     errorPolicy: 'all',
     notifyOnNetworkStatusChange: true
@@ -195,7 +223,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     data: categoriesData,
     loading: loadingCategories
   } = useQuery<CategoriesResponse>(GET_CATEGORIES, {
-    skip: shouldSkipQueries, // 🚫 PROTECTION CRITIQUE
+    skip: shouldSkipMetaQueries, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
@@ -205,7 +233,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     data: citiesData,
     loading: loadingCities
   } = useQuery<CitiesResponse>(GET_CITIES, {
-    skip: shouldSkipQueries, // 🚫 PROTECTION CRITIQUE
+    skip: shouldSkipMetaQueries, // 🚫 PROTECTION CRITIQUE
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
@@ -213,7 +241,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   // 🎯 Smart Cache Logic avec protection auth
   const loadDataWithSmartCache = useCallback(async (forceFresh = false) => {
     // 🚫 PROTECTION: Pas de smart cache si pas authentifié
-    if (!enableIntelligentCache || shouldSkipQueries) {
+    if (!enableIntelligentCache || shouldSkipPartnersQueries) {
       console.log('🔐 Smart cache bloqué - pas authentifié');
       return;
     }
@@ -285,7 +313,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     } finally {
       setSmartLoading(false);
     }
-  }, [enableIntelligentCache, shouldSkipQueries, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit]);
+  }, [enableIntelligentCache, shouldSkipPartnersQueries, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit]);
   // ✅ CORRECTION: Retiré lastRefreshTime des deps pour stabiliser la fonction
 
   // 🎯 Précharger données critiques - 🔐 PROTÉGÉ
@@ -295,6 +323,20 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
       preloadCriticalData();
     }
   }, [preloadData, isAuthenticated, authLoading]);
+
+  useEffect(() => {
+    const normalized = normalizeCategoryList(categoriesData?.getCategories?.categories);
+    if (normalized.length > 0) {
+      setCachedCategories(normalized);
+    }
+  }, [categoriesData]);
+
+  useEffect(() => {
+    const list = (citiesData?.getCities?.cities || []).filter(Boolean);
+    if (list.length > 0) {
+      setCachedCities(list);
+    }
+  }, [citiesData]);
 
   // 📍 Détecter changement de localisation - 🔐 PROTÉGÉ
   useEffect(() => {
@@ -433,8 +475,14 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
         userPlan: searchData?.searchPartners?.userPlan || 'free',
         totalFound: searchData?.searchPartners?.totalFound || 0,
         isGeoSearch: searchData?.searchPartners?.isGeoSearch || false,
-        categories: normalizeCategoryList(categoriesData?.getCategories?.categories),
-        cities: (citiesData?.getCities?.cities || []).filter(Boolean)
+        categories: (() => {
+          const normalized = normalizeCategoryList(categoriesData?.getCategories?.categories);
+          return normalized.length > 0 ? normalized : cachedCategories;
+        })(),
+        cities: (() => {
+          const list = (citiesData?.getCities?.cities || []).filter(Boolean);
+          return list.length > 0 ? list : cachedCities;
+        })()
       };
     } else {
       return {
@@ -442,12 +490,120 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
         userPlan: partnersData?.getPartners?.userPlan || 'free',
         totalFound: partnersData?.getPartners?.totalPartners || 0,
         isGeoSearch: false,
-        categories: normalizeCategoryList(categoriesData?.getCategories?.categories),
-        cities: (citiesData?.getCities?.cities || []).filter(Boolean)
+        categories: (() => {
+          const normalized = normalizeCategoryList(categoriesData?.getCategories?.categories);
+          return normalized.length > 0 ? normalized : cachedCategories;
+        })(),
+        cities: (() => {
+          const list = (citiesData?.getCities?.cities || []).filter(Boolean);
+          return list.length > 0 ? list : cachedCities;
+        })()
       };
     }
-  }, [isAuthenticated, useSmartCache, smartData, useSearchQuery, searchData, partnersData, categoriesData, citiesData]);
+  }, [isAuthenticated, useSmartCache, smartData, useSearchQuery, searchData, partnersData, categoriesData, citiesData, cachedCategories, cachedCities]);
   // ✅ CORRECTION: useMemo optimisé pour éviter les recalculs inutiles
+  
+  const partnersWithRealtime = useMemo(() => {
+    const snapshotEntries = Object.values(partnerSnapshots || {});
+    if (!snapshotEntries || snapshotEntries.length === 0) {
+      return finalData.partners;
+    }
+    
+    const updatesById = new Map<string, any>();
+    snapshotEntries.forEach((partner: any) => {
+      if (!partner?.id) return;
+      updatesById.set(String(partner.id), partner);
+    });
+
+    if (updatesById.size === 0) {
+      return finalData.partners;
+    }
+    
+    const planLimit = getPlanDiscountLimit(finalData.userPlan);
+    
+    return finalData.partners.map((partner) => {
+      const patch = updatesById.get(String(partner.id));
+      if (!patch) {
+        return partner;
+      }
+      
+      console.log('⚡ Mise à jour temps réel (liste)', {
+        id: partner.id,
+        previousName: partner.name,
+        newName: patch.name,
+        previousDiscount: partner.offeredDiscount,
+        newDiscount: patch.offeredDiscount ?? patch.discount
+      });
+      
+      const offeredDiscount = patch.offeredDiscount ?? patch.discount ?? partner.offeredDiscount ?? partner.discount ?? 0;
+      const mergedLocation = patch.location ?? partner.location;
+      
+      return {
+        ...partner,
+        ...patch,
+        discount: offeredDiscount,
+        offeredDiscount,
+        userDiscount: Math.min(offeredDiscount, planLimit),
+        isPremiumOnly: offeredDiscount > 15,
+        canAccessFullDiscount: finalData.userPlan === 'premium' || offeredDiscount <= planLimit,
+        needsSubscription: finalData.userPlan === 'free' && offeredDiscount > 0,
+        location: mergedLocation ?? null
+      };
+    });
+  }, [finalData.partners, finalData.userPlan, partnerSnapshots]);
+
+  useEffect(() => {
+    if (!useSmartCache || !smartData || partnerUpdates.length === 0) {
+      return;
+    }
+
+    const patches = partnerUpdates.filter(update => update?.partner && !update.requiresRefetch);
+    if (patches.length === 0) {
+      return;
+    }
+
+    const map = new Map(
+      patches
+        .map((update) => update.partner)
+        .filter((partner): partner is Partner => Boolean(partner?.id))
+        .map((partner) => [String(partner.id), partner])
+    );
+
+    setSmartData((prev: any) => {
+      if (!prev) return prev;
+      const listKey = useSearchQuery ? 'searchPartners' : 'getPartners';
+      const response = prev.partners?.[listKey];
+      if (!response?.partners) {
+        return prev;
+      }
+
+      let shouldUpdate = false;
+      const updatedPartners = response.partners.map((item: any) => {
+        const patch = map.get(String(item.id));
+        if (!patch) return item;
+        const merged = { ...item, ...patch };
+        if (!shouldUpdate && hasPartnerDiff(item, merged)) {
+          shouldUpdate = true;
+        }
+        return merged;
+      });
+
+      if (!shouldUpdate) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        partners: {
+          ...prev.partners,
+          [listKey]: {
+            ...response,
+            partners: updatedPartners
+          }
+        }
+      };
+    });
+  }, [partnerUpdates, useSmartCache, smartData, useSearchQuery]);
 
   // 🔄 Fonction refresh centralisée - 🔐 PROTÉGÉE
   const refetch = useCallback(async () => {
@@ -531,7 +687,7 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
 
   return {
     // Données
-    partners: finalData.partners,
+    partners: partnersWithRealtime,
     categories: finalData.categories,
     cities: finalData.cities,
     userPlan: finalData.userPlan,
@@ -592,3 +748,20 @@ export const usePartnersSearchProtected = (lat?: number, lng?: number, radius?: 
 };
 
 export default usePartnersProtected;
+const hasPartnerDiff = (current: Partner, next: Partner) => {
+  const keys: Array<keyof Partner> = [
+    'name',
+    'category',
+    'address',
+    'city',
+    'zipCode',
+    'phone',
+    'logo',
+    'description',
+    'website',
+    'offeredDiscount',
+    'userDiscount'
+  ];
+
+  return keys.some((key) => (current[key] ?? null) !== (next[key] ?? null));
+};

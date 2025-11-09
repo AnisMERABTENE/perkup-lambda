@@ -1,6 +1,8 @@
 import cacheService from '../cacheService.js';
 import Partner from '../../../models/Partner.js';
 import GeocodingService from '../../geocodingService.js';
+import { buildPartnerSlug } from '../../../utils/partnerSlug.js';
+import { invalidatePartnerDetailCaches } from '../../../utils/partnerCacheInvalidation.js';
 
 // Cache des données partenaires
 export class PartnerCache {
@@ -19,6 +21,10 @@ export class PartnerCache {
         return obj;
       }
     );
+  }
+
+  static async invalidateCache(pattern = '') {
+    await cacheService.invalidate(pattern, 'partners');
   }
   
   // Cache des partenaires par vendeur
@@ -212,22 +218,43 @@ export class PartnerCache {
   }
   
   // Invalidation après modification
-  static async invalidatePartner(partnerId, vendorId = null) {
+  static async invalidatePartner(partnerId, vendorId = null, partnerName = null, previousName = null) {
     console.log(`🔥 DÉBUT INVALIDATION CACHE - partnerId: ${partnerId}, vendorId: ${vendorId}`);
-    
-    await Promise.all([
+    const tasks = [
       cacheService.del(partnerId, 'partners'),
       vendorId ? cacheService.del(`vendor:${vendorId}`, 'partners') : Promise.resolve(),
-      // 🔥 INVALIDATION CACHE GLOBAL PARTENAIRES - CORRECTION CRITIQUE
       cacheService.del('all_partners:v2', 'partners'),
       cacheService.del('all_categories', 'partners')
-    ]);
+    ];
+
+    const slugs = new Set();
+    if (partnerName) {
+      const slug = buildPartnerSlug(partnerName);
+      if (slug) slugs.add(slug);
+    }
+    if (previousName) {
+      const slug = buildPartnerSlug(previousName);
+      if (slug) slugs.add(slug);
+    }
+
+    if (partnerId || slugs.size) {
+      tasks.push(
+        invalidatePartnerDetailCaches([
+          partnerId,
+          ...Array.from(slugs)
+        ])
+      );
+    }
+    
+    await Promise.all(tasks);
     
     console.log(`✅ INVALIDATION CACHE TERMINÉE - Clés supprimées:`);
     console.log(`- ${partnerId} (partners)`);
     if (vendorId) console.log(`- vendor:${vendorId} (partners)`);
     console.log(`- all_partners:v2 (partners) <- CLÉ PRINCIPALE`);
     console.log(`- all_categories (partners)`);
+    if (partnerId) console.log(`- partner_detail:${partnerId}`);
+    slugs.forEach(slug => console.log(`- partner_detail:${slug}`));
   }
   
   // Labels des catégories

@@ -96,7 +96,8 @@ export const usePartners = (options: UsePartnersOptions = {}): UsePartnersReturn
     connected: wsConnected, 
     updates: partnerUpdates, 
     refetchUpdates, 
-    acknowledgeUpdates 
+    acknowledgeUpdates,
+    partnerSnapshots
   } = usePartnerUpdates(city, category);
 
   // 📊 États locaux

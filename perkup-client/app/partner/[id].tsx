@@ -26,15 +26,40 @@ export default function PartnerDetailScreen() {
   console.log('🔍 Partner Detail - ID reçu:', { id });
 
   // 🚀 OPTIMISÉ: Utilise GET_PARTNER_DETAIL avec cache partagé par plan
-  const { data, loading, error } = useQuery(GET_PARTNER_DETAIL, {
+  const { data, loading, error, refetch } = useQuery(GET_PARTNER_DETAIL, {
     variables: { id },
     errorPolicy: 'all',
-    fetchPolicy: 'cache-first', // ✅ Profite du cache partagé backend
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'cache-first',
     notifyOnNetworkStatusChange: true,
     skip: !id, // Ne pas exécuter si pas d'ID
   });
 
   const partnerData = data?.getPartner;
+  
+  React.useEffect(() => {
+    if (loading) {
+      console.log('🌀 Partner detail loading...', { id, loading });
+    }
+  }, [loading, id]);
+
+  React.useEffect(() => {
+    if (error) {
+      console.log('❌ Partner detail error', error);
+    }
+  }, [error]);
+
+  React.useEffect(() => {
+    if (partnerData) {
+      console.log('🧾 Partner detail reçu', {
+        id: partnerData.id,
+        offeredDiscount: partnerData.offeredDiscount,
+        userDiscount: partnerData.userDiscount,
+        cacheInfo: partnerData._cacheInfo,
+        fetchedAt: new Date().toISOString()
+      });
+    }
+  }, [partnerData]);
 
   const handleCall = () => {
     if (partnerData?.phone) {

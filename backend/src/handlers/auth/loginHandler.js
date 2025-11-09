@@ -43,6 +43,7 @@ export const handler = async (event) => {
         lastname: user.lastname,
         email: user.email,
         role: user.role,
+        pushNotificationsEnabled: user.notificationsEnabled || false,
       },
       needsSetup,
       redirectTo: needsSetup ? "setup" : "dashboard",

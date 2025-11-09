@@ -55,6 +55,7 @@ const vendorTypeDefs = `
   type Store {
     id: ID!
     name: String!
+     slug: String
     category: String!
     address: String!
     city: String!

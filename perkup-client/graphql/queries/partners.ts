@@ -6,6 +6,7 @@ export const GET_PARTNERS = gql`
     getPartners(category: $category) {
       partners {
         id
+        slug
         name
         category
         address
@@ -56,6 +57,7 @@ export const SEARCH_PARTNERS = gql`
     ) {
       partners {
         id
+        slug
         name
         category
         address
@@ -150,6 +152,7 @@ export const GET_PARTNER_DETAIL = gql`
   query GetPartnerDetail($id: ID!) {
     getPartner(id: $id) {
       id
+      slug
       name
       category
       address
@@ -185,6 +188,7 @@ export const GET_PARTNER_DETAIL = gql`
 // ✅ Types TypeScript optimisés
 export interface Partner {
   id: string;
+  slug?: string | null;
   name: string;
   category: string;
   address: string;
@@ -210,6 +214,7 @@ export interface Partner {
 
 export interface PartnerDetail extends Partner {
   id: string;
+  slug?: string | null;
   userPlan: string;
   createdAt: string;
   updatedAt: string;
