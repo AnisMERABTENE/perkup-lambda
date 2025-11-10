@@ -230,21 +230,20 @@ export default function PartnersScreen() {
         }}
         activeOpacity={0.7}
       >
-        {partner.logo && (
+        {partner.logo ? (
           <Image 
             source={{ uri: partner.logo }} 
             style={styles.partnerFullImage}
             resizeMode="cover"
           />
-        )}
-        
-        {!partner.logo && (
+        ) : (
           <View style={styles.partnerImageFallback}>
             <Ionicons 
               name={getCategoryIcon(partner.category) as any} 
-              size={48} 
-              color={AppColors.primary} 
+              size={42} 
+              color={AppColors.primary}
             />
+            <Text style={styles.partnerFallbackText}>Logo non disponible</Text>
           </View>
         )}
         
@@ -397,6 +396,7 @@ export default function PartnersScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.partnerSeparator} />}
         />
       )}
     </View>
@@ -467,7 +467,9 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
     paddingBottom: 100,
-    gap: 12,
+  },
+  partnerSeparator: {
+    height: 20,
   },
   partnerCard: {
     backgroundColor: AppColors.surface,
@@ -478,7 +480,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: AppColors.border,
   },
   partnerFullImage: {
     width: '100%',
@@ -488,9 +491,14 @@ const styles = StyleSheet.create({
   partnerImageFallback: {
     width: '100%',
     height: 120,
-    backgroundColor: AppColors.primary + '10',
+    backgroundColor: AppColors.surfaceSecondary,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
+  },
+  partnerFallbackText: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
   },
   discountBadge: {
     position: 'absolute',
