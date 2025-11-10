@@ -61,7 +61,12 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
           <Text style={styles.usageTitle}>
             {item.partner?.name ? item.partner.name : 'Réduction utilisée'}
           </Text>
-          <Text style={styles.usageDate}>{formatDate(item.usedAt)}</Text>
+          <View style={styles.dateBadges}>
+            <Text style={styles.usageDate}>{formatDate(item.usedAt)}</Text>
+            {item.plan && (
+              <Text style={styles.planBadge}>{item.plan?.toUpperCase?.()}</Text>
+            )}
+          </View>
         </View>
         
         <View style={styles.usageDetails}>
@@ -78,8 +83,11 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
         </View>
 
         <View style={styles.usageFooter}>
-          <Text style={styles.usageToken}>Token: •••{item.token?.slice(-4)}</Text>
-          <Text style={styles.planBadge}>{item.plan?.toUpperCase?.()}</Text>
+          <View style={styles.usageStatus}>
+            <Ionicons name="shield-checkmark" size={12} color={AppColors.success} />
+            <Text style={styles.usageStatusText}>{formatAmount(item.amounts.savings)} économisés</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={AppColors.textSecondary} />
         </View>
       </View>
     </View>
@@ -102,7 +110,6 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
         keyExtractor={(item, index) => `${item.token}-${index}`}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
 
       {recentUsage.length >= maxItems && (
@@ -118,7 +125,9 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
 const styles = StyleSheet.create({
   container: {
     marginTop: 32,
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
+    paddingBottom: 16,
+    marginBottom: 8,
   },
 
   loadingContainer: {
@@ -148,6 +157,7 @@ const styles = StyleSheet.create({
   },
 
   statsContainer: {
+    flexShrink: 1,
     backgroundColor: AppColors.surfaceSecondary,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -158,10 +168,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: AppColors.textSecondary,
+    flexWrap: 'wrap',
   },
 
   listContainer: {
-    paddingBottom: 16,
+    paddingBottom: 8,
+    gap: 12,
   },
 
   usageItem: {
@@ -169,9 +181,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: AppColors.surface,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: AppColors.borderLight,
+    borderColor: AppColors.border,
+    shadowColor: AppColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
 
   usageIcon: {
@@ -187,6 +204,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    gap: 8,
   },
 
   usageTitle: {
@@ -195,6 +213,10 @@ const styles = StyleSheet.create({
     color: AppColors.text,
   },
 
+  dateBadges: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
   usageDate: {
     fontSize: 12,
     color: AppColors.textLight,
@@ -221,14 +243,8 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
   },
 
-  usageToken: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    color: AppColors.textSecondary,
-  },
-
   usageFooter: {
-    marginTop: 8,
+    marginTop: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -256,9 +272,6 @@ const styles = StyleSheet.create({
     color: AppColors.success,
   },
 
-  separator: {
-    height: 8,
-  },
 
   emptyContainer: {
     alignItems: 'center',
