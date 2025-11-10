@@ -64,11 +64,12 @@ export default function MapsScreen() {
     isAuthenticated,
     authLoading 
   } = usePartnersProtected({
-    enableCache: false, // PAS DE CACHE, toujours frais
-    enableIntelligentCache: false,
-    preloadData: false,
-    forceRefresh: isFocused, // Forcer refresh SEULEMENT si focus
-    skipQueries: !isFocused // ✅ NOUVEAU: Skip si pas focus
+    category: '',
+    enableCache: true,
+    enableIntelligentCache: true,
+    preloadData: isFocused,
+    forceRefresh: false,
+    skipQueries: !isFocused
   });
 
   // Log des erreurs
