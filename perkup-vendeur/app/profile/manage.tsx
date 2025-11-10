@@ -20,6 +20,47 @@ import AppColors from '@/constants/Colors';
 import { UPDATE_VENDOR_PROFILE, UpdateVendorProfileInput, UpdateVendorProfileResponse } from '@/graphql/mutations/vendor';
 import { useAuthContext } from '@/providers/AuthProvider';
 
+const PasswordInput = ({
+  label,
+  value,
+  onChangeText,
+  placeholder
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+}) => {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.passwordWrapper}>
+        <TextInput
+          style={[styles.input, styles.passwordInput]}
+          placeholder={placeholder}
+          secureTextEntry={!visible}
+          value={value}
+          onChangeText={onChangeText}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          textContentType="none"
+          importantForAutofill="no"
+        />
+        <TouchableOpacity onPress={() => setVisible(prev => !prev)}>
+          <Ionicons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={AppColors.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 export default function ManageProfileScreen() {
   const { user, updateUser } = useAuthContext();
   const [firstname, setFirstname] = useState(user?.firstname ?? '');
@@ -188,36 +229,24 @@ export default function ManageProfileScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Sécurité</Text>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Mot de passe actuel</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mot de passe actuel"
-            secureTextEntry
-            value={currentPassword}
-            onChangeText={setCurrentPassword}
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nouveau mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nouveau mot de passe"
-            secureTextEntry
-            value={newPassword}
-            onChangeText={setNewPassword}
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Confirmation</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Confirmez le nouveau mot de passe"
-            secureTextEntry
-            value={confirmNewPassword}
-            onChangeText={setConfirmNewPassword}
-          />
-        </View>
+        <PasswordInput
+          label="Mot de passe actuel"
+          placeholder="Mot de passe actuel"
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+        />
+        <PasswordInput
+          label="Nouveau mot de passe"
+          placeholder="Nouveau mot de passe"
+          value={newPassword}
+          onChangeText={setNewPassword}
+        />
+        <PasswordInput
+          label="Confirmation"
+          placeholder="Confirmez le nouveau mot de passe"
+          value={confirmNewPassword}
+          onChangeText={setConfirmNewPassword}
+        />
         <Text style={styles.helperText}>
           • Le mot de passe actuel est requis pour changer d'email ou de mot de passe.
         </Text>
@@ -310,6 +339,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: AppColors.text,
     backgroundColor: AppColors.surface,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    paddingHorizontal: 14,
+    backgroundColor: AppColors.surface,
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 0,
   },
   helperText: {
     fontSize: 12,
