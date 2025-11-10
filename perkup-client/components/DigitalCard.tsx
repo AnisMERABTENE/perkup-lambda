@@ -46,6 +46,14 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     refetchCard,
   } = useDigitalCard();
 
+  const [hasLoadedCard, setHasLoadedCard] = useState(false);
+
+  useEffect(() => {
+    if (cardData && !hasLoadedCard) {
+      setHasLoadedCard(true);
+    }
+  }, [cardData, hasLoadedCard]);
+
   // 🎬 Animations
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const scaleAnimation = useRef(new Animated.Value(1)).current;
@@ -215,7 +223,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
   });
 
   // 📊 États de chargement
-  if (loading) {
+  if (loading && !hasLoadedCard) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={AppColors.primary} />
@@ -259,7 +267,11 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
           subscriptionStatus?.isActive && styles.cardShadow,
         ]}
       >
-        <TouchableOpacity onPress={handleCardPress} activeOpacity={0.9}>
+        <TouchableOpacity
+          onPress={handleCardPress}
+          activeOpacity={0.9}
+          disabled={toggleLoading || loading}
+        >
           {/* Face avant - Carte */}
           <Animated.View
             style={[
@@ -396,6 +408,12 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
             )}
           </Animated.View>
         </TouchableOpacity>
+        {(toggleLoading || loading) && hasLoadedCard && (
+          <View style={styles.overlayLoading} pointerEvents="none">
+            <ActivityIndicator size="small" color={AppColors.textInverse} />
+            <Text style={styles.overlayText}>Mise à jour...</Text>
+          </View>
+        )}
       </Animated.View>
 
       {/* Informations supplémentaires */}
@@ -507,6 +525,25 @@ const styles = StyleSheet.create({
   cardContainer: {
     alignSelf: 'center',
     marginBottom: 32,
+  },
+
+  overlayLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  overlayText: {
+    marginTop: 8,
+    color: AppColors.textInverse,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   cardShadow: {
