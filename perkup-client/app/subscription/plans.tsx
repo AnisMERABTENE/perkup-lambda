@@ -37,6 +37,16 @@ const SubscriptionPlansScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
+          <Text style={styles.backButtonText}>Retour</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -49,16 +59,6 @@ const SubscriptionPlansScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
-            <Text style={styles.backButtonText}>Retour</Text>
-          </TouchableOpacity>
-        </View>
 
         <View style={styles.header}>
           <Text style={styles.title}>Choisissez le plan qui vous convient</Text>
@@ -123,10 +123,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: AppColors.background,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   content: {
-    paddingHorizontal: 20,
     paddingBottom: 32,
+    paddingHorizontal: 0,
   },
   header: {
     marginBottom: 24,
@@ -134,6 +136,15 @@ const styles = StyleSheet.create({
   },
   topBar: {
     marginBottom: 16,
+    backgroundColor: AppColors.surface,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: AppColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   backButton: {
     flexDirection: 'row',

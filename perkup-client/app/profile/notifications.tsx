@@ -6,8 +6,12 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { useMutation } from '@apollo/client/react';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import AppColors from '@/constants/Colors';
 import { useAuthContext } from '@/providers/AuthProvider';
@@ -93,8 +97,14 @@ export default function NotificationSettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
+    <SafeAreaView style={styles.safeArea}>
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
+        <Text style={styles.backText}>Retour</Text>
+      </TouchableOpacity>
+
+      <View style={styles.container}>
+        <View style={styles.card}>
         <View style={styles.row}>
           <View style={styles.textContainer}>
             <Text style={styles.title}>Notifications push</Text>
@@ -132,15 +142,32 @@ export default function NotificationSettingsScreen() {
         <Text style={styles.infoFooter}>
           Vous pouvez désactiver les notifications à tout moment.
         </Text>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: AppColors.background,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  backText: {
+    color: AppColors.primary,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 0,
     backgroundColor: AppColors.background,
     gap: 16,
   },

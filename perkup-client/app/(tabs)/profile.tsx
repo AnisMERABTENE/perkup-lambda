@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppColors from '@/constants/Colors';
 import { getUserData } from '@/utils/storage';
@@ -66,19 +67,24 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={AppColors.gradientPrimary} style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.profileIcon}>
-            <Ionicons name="person" size={32} color={AppColors.textInverse} />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <LinearGradient colors={AppColors.gradientPrimary} style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color={AppColors.textInverse} />
+            <Text style={styles.backText}>Retour</Text>
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <View style={styles.profileIcon}>
+              <Ionicons name="person" size={32} color={AppColors.textInverse} />
+            </View>
+            <Text style={styles.userName}>
+              {userData?.firstname} {userData?.lastname}
+            </Text>
+            <Text style={styles.userEmail}>{userData?.email}</Text>
+            <Text style={styles.userRole}>{userData?.role}</Text>
           </View>
-          <Text style={styles.userName}>
-            {userData?.firstname} {userData?.lastname}
-          </Text>
-          <Text style={styles.userEmail}>{userData?.email}</Text>
-          <Text style={styles.userRole}>{userData?.role}</Text>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
@@ -142,11 +148,16 @@ export default function ProfileScreen() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: AppColors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: AppColors.background,
@@ -155,6 +166,17 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 30,
     paddingHorizontal: 20,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  backText: {
+    color: AppColors.textInverse,
+    fontWeight: '600',
   },
   headerContent: {
     alignItems: 'center',
