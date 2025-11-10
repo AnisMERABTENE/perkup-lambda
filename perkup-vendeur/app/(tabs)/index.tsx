@@ -16,12 +16,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useMutation } from '@apollo/client/react';
+import { useRouter } from 'expo-router';
 
 import AppColors from '@/constants/Colors';
 import { VALIDATE_DIGITAL_CARD, ValidateDigitalCardResponse, ValidateDigitalCardInput } from '@/graphql/mutations/digitalCard';
 import { getStoreData, StoreData } from '@/utils/storage';
 
 export default function DashboardScreen() {
+  const router = useRouter();
   const [storeData, setStoreData] = useState<StoreData | null>(null);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
@@ -333,7 +335,10 @@ export default function DashboardScreen() {
       <View style={styles.actionsContainer}>
         <Text style={styles.sectionTitle}>Actions rapides</Text>
         
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => router.push('/(tabs)/store')}
+        >
           <Ionicons name="storefront-outline" size={24} color={AppColors.primary} />
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>Gérer ma boutique</Text>
