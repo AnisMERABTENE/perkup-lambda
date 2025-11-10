@@ -110,6 +110,20 @@ const vendorTypeDefs = `
     store: Store!
   }
 
+  input UpdateVendorProfileInput {
+    firstname: String
+    lastname: String
+    email: String
+    currentPassword: String
+    newPassword: String
+    confirmNewPassword: String
+  }
+
+  type UpdateVendorProfileResponse {
+    message: String!
+    user: VendorUser!
+  }
+
   extend type Query {
     getVendorProfile: VendorProfile!
     getVendorStores: VendorStoresResponse!
@@ -119,6 +133,7 @@ const vendorTypeDefs = `
   extend type Mutation {
     createStore(input: CreateStoreInput!): CreateStoreResponse!
     updateStore(input: UpdateStoreInput!): UpdateStoreResponse!
+    updateVendorProfile(input: UpdateVendorProfileInput!): UpdateVendorProfileResponse!
   }
 `;
 

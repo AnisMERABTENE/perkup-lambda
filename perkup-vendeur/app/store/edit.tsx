@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import StoreForm from '@/components/store/StoreForm';
 import AppColors from '@/constants/Colors';
@@ -45,18 +47,31 @@ export default function EditStoreScreen() {
   }
 
   return (
-    <StoreForm
-      mode="edit"
-      initialData={initialData}
-      onSuccess={() => {
-        refetch();
-        router.back();
-      }}
-    />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={{ flex: 1 }}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
+          <Text style={styles.backText}>Retour</Text>
+        </TouchableOpacity>
+
+        <StoreForm
+          mode="edit"
+          initialData={initialData}
+          onSuccess={() => {
+            refetch();
+            router.back();
+          }}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: AppColors.background,
+  },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -68,5 +83,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: AppColors.textSecondary,
     textAlign: 'center',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backText: {
+    color: AppColors.primary,
+    fontWeight: '600',
   },
 });

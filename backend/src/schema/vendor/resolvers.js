@@ -1,4 +1,5 @@
 import { createStoreHandler, updateStoreHandler, getVendorProfileHandler, getVendorStoresHandler } from '../../handlers/vendor/storeHandler.js';
+import { updateVendorProfileHandler } from '../../handlers/vendor/profileHandler.js';
 import { generateUploadSignature } from '../../services/cloudinaryService.js';
 import { withAuth } from '../../middlewares/checkSubscription.js';
 
@@ -63,6 +64,16 @@ const vendorResolvers = {
       }
       
       return await updateStoreHandler(event);
+    }),
+
+    updateVendorProfile: withAuth(async (_, args, context) => {
+      const event = { args, context };
+
+      if (context.user.role !== 'vendor') {
+        throw new Error('Seuls les vendeurs peuvent modifier leur profil via cet endpoint');
+      }
+
+      return await updateVendorProfileHandler(event);
     })
   }
 };

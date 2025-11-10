@@ -515,6 +515,13 @@ export const StoreForm: React.FC<StoreFormProps> = ({ mode, initialData, onSucce
       >
         <View style={styles.modalOverlay}>
           <View style={styles.categoryModal}>
+            <TouchableOpacity
+              style={styles.modalBackButton}
+              onPress={() => setShowCategoryModal(false)}
+            >
+              <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
+              <Text style={styles.modalBackText}>Retour</Text>
+            </TouchableOpacity>
             <Text style={styles.modalTitle}>Catégories disponibles</Text>
             <ScrollView style={{ maxHeight: 400 }}>
               {categories.map((category) => (
@@ -784,7 +791,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -792,9 +799,24 @@ const styles = StyleSheet.create({
   categoryModal: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: AppColors.card,
+    backgroundColor: AppColors.surface,
     borderRadius: 24,
     padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  modalBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  modalBackText: {
+    fontSize: 16,
+    color: AppColors.primary,
+    fontWeight: '600',
   },
   modalTitle: {
     fontSize: 18,
@@ -809,6 +831,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: AppColors.border,
+    backgroundColor: AppColors.card,
     marginBottom: 12,
   },
   categoryOptionSelected: {
