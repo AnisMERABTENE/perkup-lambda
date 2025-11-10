@@ -17,6 +17,7 @@ import AppColors from '@/constants/Colors';
 import { generateLeafletHTML } from '@/utils/leafletHTML';
 import { PartnerFilters } from '@/components/PartnerFilters';
 import { buildCityGroupsFromList } from '@/utils/cityGroups';
+import { useTranslation } from '@/providers/I18nProvider';
 
 const formatCategoryLabel = (value: string) =>
   value
@@ -47,6 +48,7 @@ export default function MapsScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCityGroupKey, setSelectedCityGroupKey] = useState<string | null>(null);
+  const { t } = useTranslation();
   
   // 🎯 OPTIMISATION: Désactiver le hook si la page n'est pas focus
   const isFocused = useIsFocused();
@@ -62,7 +64,8 @@ export default function MapsScreen() {
     error, 
     refetch,
     isAuthenticated,
-    authLoading 
+    authLoading,
+    totalFound
   } = usePartnersProtected({
     category: '',
     enableCache: true,
@@ -205,10 +208,7 @@ export default function MapsScreen() {
       // Demander permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission refusée',
-          'Activez la géolocalisation pour voir votre position sur la carte.'
-        );
+        Alert.alert('Maps', t('maps_permission_error'));
         setLocationLoading(false);
         return;
       }
@@ -236,7 +236,7 @@ export default function MapsScreen() {
       }
     } catch (error) {
       console.error('Erreur géolocalisation:', error);
-      Alert.alert('Erreur', 'Impossible de récupérer votre position');
+      Alert.alert('Maps', t('maps_load_error'));
     } finally {
       setLocationLoading(false);
     }
@@ -299,7 +299,7 @@ export default function MapsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={AppColors.primary} />
-        <Text style={styles.loadingText}>Vérification authentification...</Text>
+        <Text style={styles.loadingText}>{t('partners_loading_auth')}</Text>
       </View>
     );
   }
@@ -307,8 +307,8 @@ export default function MapsScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Authentification requise</Text>
-        <Text style={styles.errorSubText}>Veuillez vous connecter pour accéder à la carte</Text>
+        <Text style={styles.errorText}>{t('maps_auth_required')}</Text>
+        <Text style={styles.errorSubText}>{t('maps_auth_hint')}</Text>
       </View>
     );
   }
@@ -317,7 +317,7 @@ export default function MapsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={AppColors.primary} />
-        <Text style={styles.loadingText}>Chargement de la carte...</Text>
+        <Text style={styles.loadingText}>{t('maps_loading')}</Text>
       </View>
     );
   }
@@ -345,14 +345,13 @@ export default function MapsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTextContainer}>
-          <Text style={styles.headerTitle}>Carte des partenaires</Text>
+          <Text style={styles.headerTitle}>{t('maps_title')}</Text>
           <Text style={styles.headerSubtitle}>
-            {stores.length > 0 
-              ? `${stores.length} partenaires localisés`
+            {stores.length > 0
+              ? t('partners_stats', { count: stores.length, total: totalFound || partners.length })
               : filteredPartners.length === 0
-                ? 'Aucun partenaire pour ces filtres'
-                : 'Chargement...'
-            }
+                ? t('maps_no_results')
+                : t('common_loading')}
           </Text>
         </View>
         <TouchableOpacity
@@ -360,7 +359,7 @@ export default function MapsScreen() {
           onPress={() => setFilterModalVisible(true)}
         >
           <Ionicons name="options" size={20} color={AppColors.textInverse} />
-          <Text style={styles.headerFilterButtonText}>Filtres</Text>
+          <Text style={styles.headerFilterButtonText}>{t('maps_filter_button')}</Text>
         </TouchableOpacity>
       </View>
 

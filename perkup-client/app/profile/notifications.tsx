@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import AppColors from '@/constants/Colors';
 import { useAuthContext } from '@/providers/AuthProvider';
+import { useTranslation } from '@/providers/I18nProvider';
 import {
   UPDATE_PUSH_SETTINGS,
   UpdatePushSettingsInput,
@@ -27,6 +28,7 @@ export default function NotificationSettingsScreen() {
   const { user, updateUser } = useAuthContext();
   const [enabled, setEnabled] = useState<boolean>(!!user?.pushNotificationsEnabled);
   const [loading, setLoading] = useState(false);
+  const { t } = useTranslation();
 
   const [updatePushSettingsMutation] = useMutation<
     UpdatePushSettingsResponse,
@@ -81,15 +83,15 @@ export default function NotificationSettingsScreen() {
         await removePushToken();
       }
 
-      Alert.alert('Notifications', data.updatePushNotificationSettings.message);
+      Alert.alert(t('notifications_title'), data.updatePushNotificationSettings.message);
     } catch (error: any) {
       console.error('❌ Erreur mise à jour notifications:', error);
       if (targetEnabled) {
         await removePushToken();
       }
       Alert.alert(
-        'Notifications',
-        error?.message || 'Impossible de mettre à jour les notifications push.'
+        t('notifications_title'),
+        error?.message || t('notifications_info_footer')
       );
     } finally {
       setLoading(false);
@@ -100,48 +102,40 @@ export default function NotificationSettingsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
-        <Text style={styles.backText}>Retour</Text>
+        <Text style={styles.backText}>{t('button_back')}</Text>
       </TouchableOpacity>
 
       <View style={styles.container}>
         <View style={styles.card}>
-        <View style={styles.row}>
-          <View style={styles.textContainer}>
-            <Text style={styles.title}>Notifications push</Text>
-            <Text style={styles.subtitle}>
-              {enabled
-                ? 'Vous recevrez les nouvelles boutiques et les offres spéciales en temps réel.'
-                : 'Activez pour être alerté dès qu’une nouvelle offre arrive.'}
-            </Text>
+          <View style={styles.row}>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>{t('notifications_title')}</Text>
+              <Text style={styles.subtitle}>
+                {enabled ? t('notifications_subtitle_on') : t('notifications_subtitle_off')}
+              </Text>
+            </View>
+            <Switch
+              value={enabled}
+              onValueChange={handleToggle}
+              trackColor={{ false: '#767577', true: AppColors.primary }}
+              thumbColor={enabled ? AppColors.textInverse : '#f4f3f4'}
+              disabled={loading}
+            />
           </View>
-          <Switch
-            value={enabled}
-            onValueChange={handleToggle}
-            trackColor={{ false: '#767577', true: AppColors.primary }}
-            thumbColor={enabled ? AppColors.textInverse : '#f4f3f4'}
-            disabled={loading}
-          />
+          {loading && (
+            <View style={styles.loader}>
+              <ActivityIndicator size="small" color={AppColors.primary} />
+              <Text style={styles.loaderText}>{t('common_loading')}</Text>
+            </View>
+          )}
         </View>
-        {loading && (
-          <View style={styles.loader}>
-            <ActivityIndicator size="small" color={AppColors.primary} />
-            <Text style={styles.loaderText}>Mise à jour...</Text>
-          </View>
-        )}
-      </View>
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Comment ça marche ?</Text>
-        <Text style={styles.infoText}>• Nouveau partenaire : vous êtes alerté dès son arrivée.</Text>
-        <Text style={styles.infoText}>
-          • Promo exceptionnelle (&gt; 15%) : recevez une notification adaptée à votre plan.
-        </Text>
-        <Text style={styles.infoText}>
-          • Touchez la notification pour ouvrir le partenaire directement dans l’app.
-        </Text>
-        <Text style={styles.infoFooter}>
-          Vous pouvez désactiver les notifications à tout moment.
-        </Text>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>{t('notifications_info_title')}</Text>
+          <Text style={styles.infoText}>• {t('notifications_info_line1')}</Text>
+          <Text style={styles.infoText}>• {t('notifications_info_line2')}</Text>
+          <Text style={styles.infoText}>• {t('notifications_info_line3')}</Text>
+          <Text style={styles.infoFooter}>{t('notifications_info_footer')}</Text>
         </View>
       </View>
     </SafeAreaView>

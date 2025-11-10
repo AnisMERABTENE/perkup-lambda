@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AppColors from '@/constants/Colors';
 import useDigitalCard from '@/hooks/useDigitalCard';
 import { formatDate, formatAmount } from '@/utils/cardUtils';
+import { useTranslation } from '@/providers/I18nProvider';
 
 interface DiscountHistoryProps {
   maxItems?: number;
@@ -18,6 +19,7 @@ interface DiscountHistoryProps {
 
 export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) {
   const { cardUsage, usageLoading, subscriptionStatus } = useDigitalCard();
+  const { t } = useTranslation();
 
   // Ne pas afficher si pas d'abonnement actif
   if (!subscriptionStatus?.isActive) {
@@ -28,7 +30,7 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color={AppColors.primary} />
-        <Text style={styles.loadingText}>Chargement de l'historique...</Text>
+        <Text style={styles.loadingText}>{t('common_loading')}</Text>
       </View>
     );
   }
@@ -38,12 +40,12 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
   if (recentUsage.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Historique des Réductions</Text>
+        <Text style={styles.title}>{t('card_history_title')}</Text>
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={48} color={AppColors.textLight} />
-          <Text style={styles.emptyText}>Aucune réduction utilisée</Text>
+          <Text style={styles.emptyText}>{t('card_history_empty_title')}</Text>
           <Text style={styles.emptySubtext}>
-            Vos prochaines réductions apparaîtront ici
+            {t('card_history_empty_subtitle')}
           </Text>
         </View>
       </View>
@@ -96,10 +98,13 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Historique des Réductions</Text>
+        <Text style={styles.title}>{t('card_history_title')}</Text>
         <View style={styles.statsContainer}>
           <Text style={styles.statsText}>
-            {cardUsage?.usage?.totalScans || 0} utilisations • {formatAmount(cardUsage?.usage?.totalSavings || 0)} économisés
+            {t('card_history_stats', {
+              count: cardUsage?.usage?.totalScans || 0,
+              amount: formatAmount(cardUsage?.usage?.totalSavings || 0)
+            })}
           </Text>
         </View>
       </View>
@@ -114,7 +119,7 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
 
       {recentUsage.length >= maxItems && (
         <TouchableOpacity style={styles.viewMoreButton}>
-          <Text style={styles.viewMoreText}>Voir tout l'historique</Text>
+          <Text style={styles.viewMoreText}>{t('card_history_view_more')}</Text>
           <Ionicons name="chevron-forward" size={16} color={AppColors.primary} />
         </TouchableOpacity>
       )}

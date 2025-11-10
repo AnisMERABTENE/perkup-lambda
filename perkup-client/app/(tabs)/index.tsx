@@ -21,6 +21,7 @@ import { usePartnersProtected } from '@/hooks/usePartnersProtected';
 import { Partner } from '@/graphql/queries/partners';
 import { PartnerFilters } from '@/components/PartnerFilters';
 import { buildCityGroupsFromList } from '@/utils/cityGroups';
+import { useTranslation } from '@/providers/I18nProvider';
 
 const formatCategoryLabel = (value: string) =>
   value
@@ -42,6 +43,7 @@ export default function PartnersScreen() {
   
   // 🎯 OPTIMISATION: Désactiver le hook si la page n'est pas focus
   const isFocused = useIsFocused();
+  const { t } = useTranslation();
 
   const {
     partners,
@@ -191,21 +193,27 @@ export default function PartnersScreen() {
     // Déterminer le message selon le plan
     if (userPlan === 'free') {
       userActualDiscount = 0;
-      showPromoMessage = true;
-      if (realDiscount > 0) {
-        discountMessage = `Prenez un abonnement et profitez jusqu'à ${realDiscount}% de réduction !`;
+      showPromoMessage = realDiscount > 0;
+      if (showPromoMessage) {
+        discountMessage = t('partners_promo_free', { discount: realDiscount });
       }
     } else if (userPlan === 'basic') {
       userActualDiscount = Math.min(realDiscount, 5);
       if (realDiscount > 5) {
         showPromoMessage = true;
-        discountMessage = `Vous bénéficiez de 5% de réduction sur ce magasin, mais vous pouvez en bénéficier jusqu'à ${Math.min(realDiscount, 10)}%`;
+        discountMessage = t('partners_promo_basic', {
+          userDiscount: userActualDiscount,
+          max: Math.min(realDiscount, 10)
+        });
       }
     } else if (userPlan === 'super') {
       userActualDiscount = Math.min(realDiscount, 10);
       if (realDiscount > 10) {
         showPromoMessage = true;
-        discountMessage = `Vous bénéficiez de 10% de réduction sur ce magasin, mais vous pouvez en bénéficier jusqu'à ${realDiscount}%`;
+        discountMessage = t('partners_promo_super', {
+          userDiscount: userActualDiscount,
+          max: realDiscount
+        });
       }
     } else {
       userActualDiscount = realDiscount;
@@ -300,7 +308,7 @@ export default function PartnersScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={AppColors.primary} />
-        <Text style={styles.loadingText}>Vérification authentification...</Text>
+        <Text style={styles.loadingText}>{t('partners_loading_auth')}</Text>
       </View>
     );
   }
@@ -308,8 +316,8 @@ export default function PartnersScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Authentification requise</Text>
-        <Text style={styles.errorSubText}>Veuillez vous connecter pour accéder aux partenaires</Text>
+        <Text style={styles.errorText}>{t('maps_auth_required')}</Text>
+        <Text style={styles.errorSubText}>{t('maps_auth_hint')}</Text>
       </View>
     );
   }
@@ -317,9 +325,9 @@ export default function PartnersScreen() {
   if (errorPartners) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Erreur de chargement</Text>
+        <Text style={styles.errorText}>{t('partners_error_title')}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={refetchPartners}>
-          <Text style={styles.retryButtonText}>Réessayer</Text>
+          <Text style={styles.retryButtonText}>{t('partners_retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -351,7 +359,7 @@ export default function PartnersScreen() {
             <Text style={styles.greeting}>Salut {userData?.firstname || 'Anis'}</Text>
             <Text style={styles.plan}>{userPlan || 'free'}</Text>
             <Text style={styles.statsText}>
-              {uniqueFilteredPartners.length} partenaires trouvés sur {totalFound}
+              {t('partners_stats', { count: uniqueFilteredPartners.length, total: totalFound })}
             </Text>
           </View>
 
@@ -360,7 +368,7 @@ export default function PartnersScreen() {
               <Ionicons name="search" size={20} color={AppColors.textSecondary} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Rechercher un partenaire..."
+                placeholder={t('partners_search_placeholder')}
                 placeholderTextColor={AppColors.textLight}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -372,7 +380,7 @@ export default function PartnersScreen() {
               onPress={() => setFilterModalVisible(true)}
             >
               <Ionicons name="options" size={20} color={AppColors.textInverse} />
-              <Text style={styles.filterButtonText}>Filtres</Text>
+              <Text style={styles.filterButtonText}>{t('partners_filters')}</Text>
             </TouchableOpacity>
           </View>
         </View>

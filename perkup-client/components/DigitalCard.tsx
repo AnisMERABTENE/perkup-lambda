@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
 import AppColors from '@/constants/Colors';
+import { useTranslation } from '@/providers/I18nProvider';
 import useDigitalCard from '@/hooks/useDigitalCard';
 import {
   formatCardNumber,
@@ -45,6 +46,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     refreshAll,
     refetchCard,
   } = useDigitalCard();
+  const { t } = useTranslation();
 
   const [hasLoadedCard, setHasLoadedCard] = useState(false);
 
@@ -165,8 +167,8 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
         onSubscriptionPress();
       } else {
         Alert.alert(
-          'Abonnement requis',
-          'Vous devez souscrire à un abonnement pour utiliser votre carte de réduction.',
+          t('card_no_subscription_title'),
+          t('card_no_subscription_message'),
           [{ text: 'OK', style: 'default' }]
         );
       }
@@ -227,7 +229,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={AppColors.primary} />
-        <Text style={styles.loadingText}>Chargement de votre carte...</Text>
+        <Text style={styles.loadingText}>{t('card_loading')}</Text>
       </View>
     );
   }
@@ -239,7 +241,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
         <Ionicons name="alert-circle" size={48} color={AppColors.error} />
         <Text style={styles.errorText}>{formatErrorMessage(error)}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={refreshAll}>
-          <Text style={styles.retryButtonText}>Réessayer</Text>
+          <Text style={styles.retryButtonText}>{t('common_retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -255,7 +257,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
           color={AppColors.primary} 
         />
         <Text style={styles.instructionText}>
-          Appuyez sur votre carte pour {subscriptionStatus?.isActive ? 'afficher le QR code' : 'souscrire un abonnement'}
+          {subscriptionStatus?.isActive ? t('card_instruction') : t('card_instruction_inactive')}
         </Text>
       </View>
 
@@ -344,7 +346,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
             {subscriptionStatus?.isActive && (cardData?.card?.qrCodeData || cardData?.card?.qrCode) ? (
               /* QR Code actif */
               <View style={styles.qrContainer}>
-                <Text style={styles.qrTitle}>Votre Code de Réduction</Text>
+                <Text style={styles.qrTitle}>{t('card_qr_title')}</Text>
                 
                 <View style={styles.qrImageContainer}>
                   {cardData.card.qrCodeData ? (
@@ -371,12 +373,16 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
                 <View style={styles.countdownContainer}>
                   <Ionicons name="time" size={16} color={AppColors.textLight} />
                   <Text style={styles.countdownText}>
-                    {qrTimeLeft === 0 ? 'Code expiré' : `Nouveau code dans ${Math.max(0, qrTimeLeft ?? normalizedInitialDuration())}s`}
+                    {qrTimeLeft === 0
+                      ? t('card_qr_expired')
+                      : t('card_qr_timer', { seconds: Math.max(0, qrTimeLeft ?? normalizedInitialDuration()) })}
                   </Text>
                 </View>
 
                 <Text style={styles.qrInstructions}>
-                  {qrTimeLeft === 0 ? 'Code expiré. Appuyez sur la carte pour générer un nouveau QR.' : (cardData.instructions || 'Présentez ce code au vendeur pour obtenir votre réduction')}
+                  {qrTimeLeft === 0
+                    ? t('card_qr_expired')
+                    : (cardData.instructions || t('card_qr_instructions'))}
                 </Text>
               </View>
             ) : (
@@ -389,11 +395,11 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
                 />
                 
                 <Text style={styles.subscriptionTitle}>
-                  Abonnement Requis
+                  {t('card_no_subscription_title')}
                 </Text>
                 
                 <Text style={styles.subscriptionMessage}>
-                  Veuillez prendre un abonnement pour avoir des réductions
+                  {t('card_no_subscription_message')}
                 </Text>
                 
                 <TouchableOpacity 
@@ -401,7 +407,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
                   onPress={onSubscriptionPress}
                 >
                   <Text style={styles.subscriptionButtonText}>
-                    Voir les Abonnements
+                    {t('card_no_subscription_cta')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -411,7 +417,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
         {(toggleLoading || loading) && hasLoadedCard && (
           <View style={styles.overlayLoading} pointerEvents="none">
             <ActivityIndicator size="small" color={AppColors.textInverse} />
-            <Text style={styles.overlayText}>Mise à jour...</Text>
+            <Text style={styles.overlayText}>{t('common_loading')}</Text>
           </View>
         )}
       </Animated.View>
@@ -422,14 +428,14 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
           <View style={styles.infoItem}>
             <Ionicons name="shield-checkmark" size={20} color={AppColors.success} />
             <Text style={styles.infoText}>
-              Code sécurisé qui change toutes les 120 secondes
+              {t('card_info_rotating_code')}
             </Text>
           </View>
           
           <View style={styles.infoItem}>
             <Ionicons name="storefront" size={20} color={AppColors.primary} />
             <Text style={styles.infoText}>
-              Accepté chez tous nos partenaires
+              {t('card_info_accept_all')}
             </Text>
           </View>
 
@@ -444,7 +450,7 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
                 <ActivityIndicator size="small" color="white" />
               ) : (
                 <Text style={styles.debugButtonText}>
-                  {cardData?.card?.isActive ? 'Désactiver' : 'Activer'} la carte
+                  {cardData?.card?.isActive ? t('card_debug_deactivate') : t('card_debug_activate')}
                 </Text>
               )}
             </TouchableOpacity>

@@ -16,6 +16,7 @@ import { cacheService } from '@/services/CacheService';
 import { getUserData } from '@/utils/storage';
 import AppColors from '@/constants/Colors';
 import { AuthProvider } from '@/providers/AuthProvider';
+import { I18nProvider } from '@/providers/I18nProvider';
 import { AuthGuard } from '@/components/AuthGuard';
 import { STRIPE_CONFIG } from '@/constants/Config';
 
@@ -142,11 +143,13 @@ export default function RootLayout() {
   return (
     <StripeProvider publishableKey={stripePublishableKey} merchantIdentifier="merchant.perkup.app">
       <ApolloProvider client={apolloClient}>
-        <AuthProvider>
-          <AuthGuard>
-            <RootLayoutNav />
-          </AuthGuard>
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <AuthGuard>
+              <RootLayoutNav />
+            </AuthGuard>
+          </AuthProvider>
+        </I18nProvider>
       </ApolloProvider>
     </StripeProvider>
   );

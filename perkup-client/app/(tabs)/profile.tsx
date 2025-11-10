@@ -16,12 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AppColors from '@/constants/Colors';
 import { getUserData } from '@/utils/storage';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/providers/I18nProvider';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
   
   // 🎯 Utiliser le hook centralisé pour la déconnexion
   const { logout } = useAuth();
+  const { t } = useTranslation();
 
   useEffect(() => {
     loadUserData();
@@ -46,12 +48,12 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      t('profile_logout'),
+      t('profile_logout_confirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('profile_logout_cancel'), style: 'cancel' },
         {
-          text: 'Déconnexion',
+          text: t('profile_logout_confirm_cta'),
           style: 'destructive',
           onPress: async () => {
             // ✅ Utiliser la fonction logout centralisée qui gère tout
@@ -72,9 +74,12 @@ export default function ProfileScreen() {
         <LinearGradient colors={AppColors.gradientPrimary} style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={20} color={AppColors.textInverse} />
-            <Text style={styles.backText}>Retour</Text>
+            <Text style={styles.backText}>{t('button_back')}</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
+            <Text style={styles.greetingText}>
+              {t('profile_greeting', { name: userData?.firstname || 'PerkUP' })}
+            </Text>
             <View style={styles.profileIcon}>
               <Ionicons name="person" size={32} color={AppColors.textInverse} />
             </View>
@@ -86,68 +91,68 @@ export default function ProfileScreen() {
           </View>
         </LinearGradient>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Mon compte</Text>
-          
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="person-circle-outline" size={24} color={AppColors.primary} />
-            <Text style={styles.menuText}>Informations personnelles</Text>
-            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+        <ScrollView style={styles.content}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('profile_title')}</Text>
+            
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="person-circle-outline" size={24} color={AppColors.primary} />
+              <Text style={styles.menuText}>{t('profile_personal_info')}</Text>
+              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleSubscriptionNavigation}>
+              <Ionicons name="card-outline" size={24} color={AppColors.primary} />
+              <Text style={styles.menuText}>{t('profile_subscription')}</Text>
+              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('profile_preferences')}</Text>
+            
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/profile/notifications')}
+            >
+              <Ionicons name="notifications-outline" size={24} color={AppColors.primary} />
+              <Text style={styles.menuText}>{t('profile_notifications')}</Text>
+              <Text style={styles.menuStatus}>
+                {notificationsEnabled ? t('profile_menu_notifications_status_on') : t('profile_menu_notifications_status_off')}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/settings')}>
+              <Ionicons name="settings-outline" size={24} color={AppColors.primary} />
+              <Text style={styles.menuText}>{t('profile_settings')}</Text>
+              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('profile_support')}</Text>
+            
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="help-circle-outline" size={24} color={AppColors.primary} />
+              <Text style={styles.menuText}>{t('profile_help')}</Text>
+              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="mail-outline" size={24} color={AppColors.primary} />
+              <Text style={styles.menuText}>{t('profile_contact')}</Text>
+              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={24} color={AppColors.error} />
+            <Text style={styles.logoutText}>{t('profile_logout')}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={handleSubscriptionNavigation}>
-            <Ionicons name="card-outline" size={24} color={AppColors.primary} />
-            <Text style={styles.menuText}>Mon abonnement</Text>
-            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Préférences</Text>
-          
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => router.push('/profile/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={24} color={AppColors.primary} />
-            <Text style={styles.menuText}>Notifications</Text>
-            <Text style={styles.menuStatus}>
-              {notificationsEnabled ? 'Activées' : 'Désactivées'}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="settings-outline" size={24} color={AppColors.primary} />
-            <Text style={styles.menuText}>Paramètres</Text>
-            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
-          
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="help-circle-outline" size={24} color={AppColors.primary} />
-            <Text style={styles.menuText}>Aide et FAQ</Text>
-            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="mail-outline" size={24} color={AppColors.primary} />
-            <Text style={styles.menuText}>Nous contacter</Text>
-            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color={AppColors.error} />
-          <Text style={styles.logoutText}>Déconnexion</Text>
-        </TouchableOpacity>
-
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+          <View style={styles.bottomSpacing} />
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -190,6 +195,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  greetingText: {
+    fontSize: 14,
+    color: AppColors.textInverse + 'CC',
+    marginBottom: 8,
   },
   userName: {
     fontSize: 24,

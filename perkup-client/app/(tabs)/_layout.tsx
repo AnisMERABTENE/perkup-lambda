@@ -7,6 +7,7 @@ import { Pressable } from 'react-native';
 import AppColors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { useTranslation } from '@/providers/I18nProvider';
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
@@ -18,6 +19,7 @@ function TabBarIcon(props: {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { t } = useTranslation();
 
   return (
     <Tabs
@@ -41,28 +43,28 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Partenaires',
+          title: t('tab_partners'),
           tabBarIcon: ({ color }) => <Ionicons name="storefront" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="maps"
         options={{
-          title: 'Maps',
+          title: t('tab_maps'),
           tabBarIcon: ({ color }) => <Ionicons name="map" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="card"
         options={{
-          title: 'Ma Carte',
+          title: t('tab_card'),
           tabBarIcon: ({ color }) => <Ionicons name="card" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
+          title: t('tab_profile'),
           tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
         }}
       />

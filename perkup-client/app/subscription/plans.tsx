@@ -17,6 +17,7 @@ import AppColors from '@/constants/Colors';
 import SubscriptionPlanCard from '@/components/SubscriptionPlanCard';
 import { useSubscriptionPlans } from '@/hooks/useSubscriptionPlans';
 import { getPlanDisplayName } from '@/utils/cardUtils';
+import { useTranslation } from '@/providers/I18nProvider';
 
 const SubscriptionPlansScreen: React.FC = () => {
   const {
@@ -28,6 +29,7 @@ const SubscriptionPlansScreen: React.FC = () => {
     selectPlan,
     refreshPlans,
   } = useSubscriptionPlans();
+  const { t } = useTranslation();
 
   const onRefresh = useCallback(() => {
     refreshPlans().catch((error) => {
@@ -44,7 +46,7 @@ const SubscriptionPlansScreen: React.FC = () => {
           activeOpacity={0.8}
         >
           <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
-          <Text style={styles.backButtonText}>Retour</Text>
+          <Text style={styles.backButtonText}>{t('button_back')}</Text>
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -61,14 +63,12 @@ const SubscriptionPlansScreen: React.FC = () => {
       >
 
         <View style={styles.header}>
-          <Text style={styles.title}>Choisissez le plan qui vous convient</Text>
-          <Text style={styles.subtitle}>
-            Comparez les avantages et améliorez votre expérience PerkUP en quelques secondes.
-          </Text>
+          <Text style={styles.title}>{t('subscription_choose_plan')}</Text>
+          <Text style={styles.subtitle}>{t('subscription_subtitle')}</Text>
           {currentPlan && (
             <View style={styles.currentPlanTag}>
               <Text style={styles.currentPlanText}>
-                Plan actuel : {getPlanDisplayName(currentPlan)}
+                {t('subscription_current_plan', { plan: getPlanDisplayName(currentPlan) })}
               </Text>
             </View>
           )}
@@ -77,7 +77,7 @@ const SubscriptionPlansScreen: React.FC = () => {
         {loading && !plans.length ? (
           <View style={styles.loader}>
             <ActivityIndicator size="large" color={AppColors.primary} />
-            <Text style={styles.loaderText}>Chargement des plans...</Text>
+            <Text style={styles.loaderText}>{t('subscription_loading')}</Text>
           </View>
         ) : (
           plans.map((plan) => (
@@ -92,24 +92,24 @@ const SubscriptionPlansScreen: React.FC = () => {
         )}
 
         <View style={styles.footer}>
-          <Text style={styles.footerTitle}>Comment ça marche ?</Text>
+          <Text style={styles.footerTitle}>{t('subscription_steps_title')}</Text>
           <View style={styles.stepList}>
             <View style={styles.stepItem}>
               <Text style={styles.stepIndex}>1</Text>
               <Text style={styles.stepText}>
-                Sélectionnez le plan qui correspond à vos besoins.
+                {t('subscription_step_1')}
               </Text>
             </View>
             <View style={styles.stepItem}>
               <Text style={styles.stepIndex}>2</Text>
               <Text style={styles.stepText}>
-                Confirmez le paiement sécurisé Stripe si nécessaire.
+                {t('subscription_step_2')}
               </Text>
             </View>
             <View style={styles.stepItem}>
               <Text style={styles.stepIndex}>3</Text>
               <Text style={styles.stepText}>
-                Profitez instantanément de vos nouveaux avantages sur votre carte.
+                {t('subscription_step_3')}
               </Text>
             </View>
           </View>
