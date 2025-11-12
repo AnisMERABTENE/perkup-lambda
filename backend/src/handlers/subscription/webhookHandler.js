@@ -188,18 +188,23 @@ async function handleSubscriptionCreated(subscription) {
   try {
     const customerId = subscription.customer;
     const plan = getPlanFromSubscription(subscription);
+    const finalStatuses = new Set(['active', 'trialing']);
 
     const updateData = {
       'subscription.stripeSubscriptionId': subscription.id,
-      'subscription.plan': plan,
-      'subscription.status': subscription.status
+      'subscription.stripeCustomerId': customerId
     };
 
-    if (subscription.current_period_start) {
-      updateData['subscription.currentPeriodStart'] = new Date(subscription.current_period_start * 1000);
-    }
-    if (subscription.current_period_end) {
-      updateData['subscription.currentPeriodEnd'] = new Date(subscription.current_period_end * 1000);
+    if (finalStatuses.has(subscription.status)) {
+      updateData['subscription.plan'] = plan;
+      updateData['subscription.status'] = subscription.status;
+
+      if (subscription.current_period_start) {
+        updateData['subscription.currentPeriodStart'] = new Date(subscription.current_period_start * 1000);
+      }
+      if (subscription.current_period_end) {
+        updateData['subscription.currentPeriodEnd'] = new Date(subscription.current_period_end * 1000);
+      }
     }
 
     const result = await User.findOneAndUpdate(
@@ -210,8 +215,12 @@ async function handleSubscriptionCreated(subscription) {
 
     if (!result) {
       console.error(`Utilisateur introuvable avec customerId: ${customerId}`);
-    } else {
-      console.log(`Abonnement créé - Customer: ${customerId}, Plan: ${plan}, Status: ${subscription.status}`);
+      return;
+    }
+
+    console.log(`Abonnement créé - Customer: ${customerId}, Plan: ${plan}, Status: ${subscription.status}`);
+
+    if (finalStatuses.has(subscription.status)) {
       await propagateSubscriptionChange(result, {
         plan,
         status: subscription.status,
@@ -221,6 +230,11 @@ async function handleSubscriptionCreated(subscription) {
         currentPeriodEnd: subscription.current_period_end
           ? new Date(subscription.current_period_end * 1000).toISOString()
           : undefined
+      });
+    } else {
+      console.log('Plan non finalisé, aucune propagation envoyée', {
+        plan,
+        status: subscription.status
       });
     }
   } catch (error) {
@@ -233,8 +247,9 @@ async function handleSubscriptionUpdated(subscription) {
   const customerId = subscription.customer;
   const plan = getPlanFromSubscription(subscription);
 
-  // Ignorer les abonnements expirés ou annulés
-  if (subscription.status === 'incomplete_expired' || subscription.status === 'canceled') {
+  // Seules les transitions actives comptent
+  const finalStatuses = new Set(['active', 'trialing']);
+  if (!finalStatuses.has(subscription.status)) {
     console.log(`Ignoré - Abonnement ${subscription.status} - Customer: ${customerId}`);
     return;
   }

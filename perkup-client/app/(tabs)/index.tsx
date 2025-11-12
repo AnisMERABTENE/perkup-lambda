@@ -21,9 +21,6 @@ import { Partner } from '@/graphql/queries/partners';
 import { PartnerFilters } from '@/components/PartnerFilters';
 import { buildCityGroupsFromList } from '@/utils/cityGroups';
 import { useTranslation } from '@/providers/I18nProvider';
-import { wsClient } from '@/services/WebSocketClient';
-import { smartApollo } from '@/services/SmartApolloWrapper';
-import { clearPartnersCache } from '@/graphql/apolloClient';
 
 const formatCategoryLabel = (value: string) =>
   value
@@ -70,26 +67,6 @@ export default function PartnersScreen() {
   useEffect(() => {
     loadUserData();
   }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const handleSubscriptionUpdate = () => {
-      console.log('🪪 onglet partenaires - subscription_updated reçu, invalidation cache');
-      clearPartnersCache();
-      smartApollo
-        .invalidateQueries(['GetPartners', 'SearchPartners'])
-        .catch((error) =>
-          console.error('❌ Erreur invalidation smart cache partenaires:', error)
-        );
-      refetchPartners({ fetchPolicy: 'network-only' }).catch((error) => {
-        console.error('❌ Erreur refetch partenaires après subscription_updated:', error);
-      });
-    };
-
-    const unsubscribe = wsClient.on('subscription_updated', handleSubscriptionUpdate);
-    return unsubscribe;
-  }, [isAuthenticated, refetchPartners]);
 
   const loadUserData = async () => {
     try {

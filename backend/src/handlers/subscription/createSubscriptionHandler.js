@@ -190,22 +190,9 @@ export const handler = async (event) => {
 
     // Sauvegarder les informations d'abonnement en base
     const updateData = {
-      'subscription.stripeCustomerId': customerId,  // AJOUT: toujours sauvegarder le customerId
-      'subscription.stripeSubscriptionId': subscription.id,
-      'subscription.plan': plan,
-      'subscription.status': subscription.status
+      'subscription.stripeCustomerId': customerId,
+      'subscription.stripeSubscriptionId': subscription.id
     };
-    
-    if (subscription.current_period_start && subscription.current_period_end) {
-      updateData['subscription.currentPeriodStart'] = new Date(subscription.current_period_start * 1000);
-      updateData['subscription.currentPeriodEnd'] = new Date(subscription.current_period_end * 1000);
-    } else if (!hasActiveSubscription) {
-      const startDate = new Date();
-      const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + 1);
-      updateData['subscription.currentPeriodStart'] = startDate;
-      updateData['subscription.currentPeriodEnd'] = endDate;
-    }
     
     await User.findByIdAndUpdate(user._id, {
       $set: updateData

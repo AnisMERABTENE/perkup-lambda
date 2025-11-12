@@ -35,6 +35,16 @@ interface UseSubscriptionPlansResult {
   subscriptionStatus: SubscriptionStatusResponse['getSubscriptionStatus'] | null;
 }
 
+const PLAN_CHANGE_BLOCKED_STATUSES = new Set(['incomplete', 'pending']);
+const KNOWN_PLANS: SubscriptionPlan['plan'][] = ['basic', 'super', 'premium'];
+
+const normalizePlanValue = (plan?: string | null): SubscriptionPlan['plan'] | null => {
+  if (!plan) return null;
+  return KNOWN_PLANS.includes(plan as SubscriptionPlan['plan'])
+    ? (plan as SubscriptionPlan['plan'])
+    : null;
+};
+
 export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
   const [selectingPlan, setSelectingPlan] = useState<SubscriptionPlan['plan'] | null>(null);
 
@@ -64,7 +74,20 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
   const plans = plansData?.getSubscriptionPlans?.plans ?? [];
   const currency = plansData?.getSubscriptionPlans?.currency ?? 'EUR';
 
-  const currentPlan = subscriptionStatusData?.getSubscriptionStatus?.subscription?.plan ?? null;
+  const subscriptionStatus = subscriptionStatusData?.getSubscriptionStatus ?? null;
+  const latestSubscription = subscriptionStatus?.subscription ?? null;
+  const normalizedLatestPlan = normalizePlanValue(latestSubscription?.plan ?? null);
+  const latestStatus = latestSubscription?.status ?? null;
+  const [confirmedPlan, setConfirmedPlan] = useState<SubscriptionPlan['plan'] | null>(null);
+
+  useEffect(() => {
+    if (latestStatus && PLAN_CHANGE_BLOCKED_STATUSES.has(latestStatus)) {
+      return;
+    }
+    setConfirmedPlan(normalizedLatestPlan);
+  }, [latestStatus, normalizedLatestPlan]);
+
+  const currentPlan = confirmedPlan;
 
   const refreshPlans = useCallback(async () => {
     clearSubscriptionCache();
@@ -138,7 +161,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
 
   const previousStatusRef = useRef<string | null>(null);
   useEffect(() => {
-    const latestPlan = subscriptionStatusData?.getSubscriptionStatus?.subscription?.plan;
+    const latestPlan = subscriptionStatus?.subscription?.plan;
     if (latestPlan && previousStatusRef.current && previousStatusRef.current !== latestPlan) {
       refetchPlansQuery({ fetchPolicy: 'network-only' }).catch((error) => {
         console.error('❌ Erreur refetch plans après changement de plan:', error);
@@ -147,7 +170,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
     if (latestPlan) {
       previousStatusRef.current = latestPlan;
     }
-  }, [subscriptionStatusData, refetchPlansQuery]);
+  }, [subscriptionStatus, refetchPlansQuery]);
 
   useEffect(() => {
     const unsubscribe = wsClient.on('subscription_updated', () => {
@@ -172,7 +195,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
       selectingPlan,
       selectPlan,
       refreshPlans,
-      subscriptionStatus: subscriptionStatusData?.getSubscriptionStatus ?? null,
+      subscriptionStatus,
     }),
     [
       plans,
@@ -183,7 +206,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
       selectingPlan,
       selectPlan,
       refreshPlans,
-      subscriptionStatusData,
+      subscriptionStatus,
     ]
   );
 };

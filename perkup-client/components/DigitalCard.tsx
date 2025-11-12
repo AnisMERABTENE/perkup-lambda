@@ -30,6 +30,8 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 const CARD_HEIGHT = CARD_WIDTH * 0.63; // Ratio carte de crédit standard
 
+const BLOCKED_SUBSCRIPTION_STATUSES = new Set(['incomplete', 'pending']);
+
 interface DigitalCardProps {
   onSubscriptionPress?: () => void;
 }
@@ -64,9 +66,15 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
   useEffect(() => {
     const currentPlan = subscriptionStatus?.subscription?.plan ?? null;
     const currentStatus = subscriptionStatus?.subscription?.status ?? null;
+    const isBlockedStatus =
+      currentStatus !== null && BLOCKED_SUBSCRIPTION_STATUSES.has(currentStatus);
     const { plan: previousPlan, status: previousStatus } = previousSubscriptionRef.current;
 
-    if (currentPlan && (previousPlan !== currentPlan || previousStatus !== currentStatus)) {
+    if (
+      currentPlan &&
+      !isBlockedStatus &&
+      (previousPlan !== currentPlan || previousStatus !== currentStatus)
+    ) {
       console.log('🪪 Carte digitale - subscription updated', {
         from: { plan: previousPlan, status: previousStatus },
         to: { plan: currentPlan, status: currentStatus },

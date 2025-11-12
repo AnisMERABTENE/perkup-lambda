@@ -317,22 +317,43 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   }, [enableIntelligentCache, shouldSkipPartnersQueries, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit]);
   // ✅ CORRECTION: Retiré lastRefreshTime des deps pour stabiliser la fonction
 
+  const lastWsPlanRef = useRef<string | null>(null);
+  const lastWsStatusRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
 
-    const unsubscribe = wsClient.on('subscription_updated', () => {
-      console.log('🔁 usePartnersProtected - subscription_updated reçu, rafraîchissement partenaires');
-      clearPartnersCache();
+    const handleSubscriptionUpdate = (message?: any) => {
+      const plan = message?.subscription?.plan ?? null;
+      const status = message?.subscription?.status ?? null;
+      const isFinalStatus = status === 'active' || status === 'trialing';
+
+      if (!plan || !isFinalStatus) {
+        return;
+      }
+
+      if (lastWsPlanRef.current === plan && lastWsStatusRef.current === status) {
+        return;
+      }
+
+      lastWsPlanRef.current = plan;
+      lastWsStatusRef.current = status;
+
+      console.log('🔁 usePartnersProtected - subscription_updated final reçu', { plan, status });
       refetchPartners({ fetchPolicy: 'network-only' }).catch((error) => {
         console.error('❌ Erreur refetch partenaires après subscription_updated:', error);
       });
-      loadDataWithSmartCache(true).catch((error) => {
-        console.error('❌ Erreur smart refresh partenaires après subscription_updated:', error);
-      });
-    });
 
+      if (useSmartCache) {
+        loadDataWithSmartCache(true).catch((error) => {
+          console.error('❌ Erreur smart refresh partenaires après subscription_updated:', error);
+        });
+      }
+    };
+
+    const unsubscribe = wsClient.on('subscription_updated', handleSubscriptionUpdate);
     return unsubscribe;
-  }, [isAuthenticated, user?.id, refetchPartners, loadDataWithSmartCache]);
+  }, [isAuthenticated, user?.id, refetchPartners, useSmartCache, loadDataWithSmartCache]);
 
   // 🎯 Précharger données critiques - 🔐 PROTÉGÉ
   useEffect(() => {
@@ -529,16 +550,6 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     if (nextPlan && previousPlan && previousPlan !== nextPlan) {
       console.log('🔁 usePartnersProtected - plan détecté différemment, invalidation cache partenaires');
       clearPartnersCache();
-      refetchPartners({ fetchPolicy: 'network-only' })
-        .catch((error) => {
-          console.error('❌ Erreur refetch partenaires après changement de plan:', error);
-        });
-
-      if (useSmartCache && enableIntelligentCache) {
-        loadDataWithSmartCache(true).catch((error) => {
-          console.error('❌ Erreur smart cache après changement de plan:', error);
-        });
-      }
     }
 
     if (nextPlan) {

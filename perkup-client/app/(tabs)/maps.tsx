@@ -18,9 +18,6 @@ import { PartnerFilters } from '@/components/PartnerFilters';
 import { buildCityGroupsFromList } from '@/utils/cityGroups';
 import { useTranslation } from '@/providers/I18nProvider';
 import { getPlanDisplayName, getPlanDiscountLimit } from '@/utils/cardUtils';
-import { clearPartnersCache } from '@/graphql/apolloClient';
-import { smartApollo } from '@/services/SmartApolloWrapper';
-import { wsClient } from '@/services/WebSocketClient';
 
 const formatCategoryLabel = (value: string) =>
   value
@@ -75,28 +72,6 @@ export default function MapsScreen() {
     forceRefresh: false,
     skipQueries: false
   });
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const handleSubscriptionUpdate = () => {
-      console.log('🪪 onglet maps - subscription_updated reçu, invalidation cache');
-      clearPartnersCache();
-      smartApollo
-        .invalidateQueries(['GetPartners', 'SearchPartners'])
-        .catch((error) => {
-          console.error('❌ Erreur invalidation smart cache maps:', error);
-        });
-      refetch({
-        fetchPolicy: 'network-only'
-      }).catch((error) => {
-        console.error('❌ Erreur refetch maps après subscription_updated:', error);
-      });
-    };
-
-    const unsubscribe = wsClient.on('subscription_updated', handleSubscriptionUpdate);
-    return unsubscribe;
-  }, [isAuthenticated, refetch]);
 
   const [planBanner, setPlanBanner] = useState({
     plan: userPlan || 'free',
