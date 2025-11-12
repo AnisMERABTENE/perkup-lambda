@@ -108,6 +108,18 @@ class WebSocketNotificationService {
       console.error(`❌ Erreur notification user ${userId}:`, error);
     }
   }
+
+  async notifyServerLog(userId, logEntry) {
+    try {
+      await this.notifyUser(userId, {
+        type: 'server_log',
+        log: logEntry,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error(`❌ Erreur notification server_log pour ${userId}:`, error);
+    }
+  }
   
   /**
    * 📢 BROADCAST À TOUS LES CLIENTS CONNECTÉS

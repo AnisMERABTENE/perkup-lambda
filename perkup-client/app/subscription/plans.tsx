@@ -28,8 +28,53 @@ const SubscriptionPlansScreen: React.FC = () => {
     selectingPlan,
     selectPlan,
     refreshPlans,
+    subscriptionStatus,
   } = useSubscriptionPlans();
   const { t } = useTranslation();
+  const [lastPlan, setLastPlan] = React.useState<string | null>(null);
+  const [lastStatus, setLastStatus] = React.useState<string | null>(null);
+  const latestPlan = subscriptionStatus?.subscription?.plan ?? currentPlan;
+  const latestStatus = subscriptionStatus?.subscription?.status ?? 'unknown';
+  const prevPlanRef = React.useRef<string | null>(null);
+  const prevStatusRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!latestPlan) {
+      return;
+    }
+
+    if (prevPlanRef.current && prevPlanRef.current !== latestPlan) {
+      console.log('Subscription plan updated', {
+        from: prevPlanRef.current,
+        to: latestPlan,
+        status: latestStatus,
+      });
+      setLastPlan(prevPlanRef.current);
+    } else if (!prevPlanRef.current) {
+      setLastPlan(null);
+    }
+
+    prevPlanRef.current = latestPlan;
+  }, [latestPlan, latestStatus]);
+
+  React.useEffect(() => {
+    if (!latestStatus) {
+      return;
+    }
+
+    if (prevStatusRef.current && prevStatusRef.current !== latestStatus) {
+      console.log('Subscription status changed', {
+        from: prevStatusRef.current,
+        to: latestStatus,
+        plan: latestPlan,
+      });
+      setLastStatus(prevStatusRef.current);
+    } else if (!prevStatusRef.current) {
+      setLastStatus(null);
+    }
+
+    prevStatusRef.current = latestStatus;
+  }, [latestStatus, latestPlan]);
 
   const onRefresh = useCallback(() => {
     refreshPlans().catch((error) => {
@@ -72,6 +117,20 @@ const SubscriptionPlansScreen: React.FC = () => {
               </Text>
             </View>
           )}
+          <View style={styles.subscriptionMeta}>
+            <Text style={styles.metaLabel}>
+              Plan affiché : {latestPlan ? getPlanDisplayName(latestPlan) : '—'}
+            </Text>
+            <Text style={styles.metaLabel}>
+              Statut actuel : {latestStatus ?? '—'}
+            </Text>
+            <Text style={styles.metaLabel}>
+              Ancien plan : {lastPlan ? getPlanDisplayName(lastPlan) : '—'}
+            </Text>
+            <Text style={styles.metaLabel}>
+              Ancien statut : {lastStatus ?? '—'}
+            </Text>
+          </View>
         </View>
 
         {loading && !plans.length ? (
@@ -84,7 +143,9 @@ const SubscriptionPlansScreen: React.FC = () => {
             <SubscriptionPlanCard
               key={plan.plan}
               plan={plan}
-              isCurrent={plan.isCurrentPlan}
+              isCurrent={
+                plan.plan === (subscriptionStatus?.subscription?.plan ?? currentPlan ?? plan.plan)
+              }
               isProcessing={selectingPlan === plan.plan}
               onSelect={selectPlan}
             />
@@ -177,6 +238,19 @@ const styles = StyleSheet.create({
     color: AppColors.primary,
     fontWeight: '600',
     fontSize: 13,
+  },
+  subscriptionMeta: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: AppColors.surfaceVariant,
+    padding: 12,
+    gap: 6,
+    backgroundColor: AppColors.surface,
+  },
+  metaLabel: {
+    fontSize: 13,
+    color: AppColors.textSecondary,
   },
   loader: {
     paddingVertical: 60,

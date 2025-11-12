@@ -47,8 +47,19 @@ export const searchPartnersHandler = async (event) => {
   
   try {
     // Récupérer le plan utilisateur avec cache
+    console.log('🔍 searchPartnersHandler - récupération plan user', { userId });
     const subscriptionFeatures = await SubscriptionCache.getSubscriptionFeatures(userId);
     const userPlan = subscriptionFeatures?.isActive ? subscriptionFeatures.plan : 'free';
+    console.log('🔎 searchPartnersHandler - plan évalué', { userId, userPlan, isActive: subscriptionFeatures?.isActive });
+    try {
+      await websocketService.notifyServerLog(userId, {
+        source: 'searchPartnersHandler',
+        plan: userPlan,
+        isActive: subscriptionFeatures?.isActive
+      });
+    } catch (error) {
+      console.error('❌ Erreur notifyServerLog (searchPartners):', error);
+    }
     
     console.log('Recherche avec filtres:', { lat, lng, radius, category, city, name, limit });
     
@@ -57,8 +68,8 @@ export const searchPartnersHandler = async (event) => {
       lat, lng, radius, category, city, name, limit
     });
     
-    console.log('Partenaires trouvés:', partners.length);
-    
+    console.log('Partenaires trouvés:', partners.length, { userPlan });
+
     const result = partners.map(partner => {
       const finalDiscount = calculateUserDiscount(partner.discount, userPlan);
       
@@ -162,9 +173,19 @@ export const getPartnersHandler = async (event) => {
       );
     }
     
-    // 👤 CALCUL UTILISATEUR: Après récupération cache (pas caché)
+    console.log('👤 getPartnersHandler - récupération plan user', { userId });
     const subscriptionFeatures = await SubscriptionCache.getSubscriptionFeatures(userId);
     const userPlan = subscriptionFeatures?.isActive ? subscriptionFeatures.plan : 'free';
+    console.log('📋 getPartnersHandler - plan évalué', { userId, userPlan, isActive: subscriptionFeatures?.isActive });
+    try {
+      await websocketService.notifyServerLog(userId, {
+        source: 'getPartnersHandler',
+        plan: userPlan,
+        isActive: subscriptionFeatures?.isActive
+      });
+    } catch (error) {
+      console.error('❌ Erreur notifyServerLog (getPartners):', error);
+    }
     
     const result = partners.map(partner => {
       const finalDiscount = calculateUserDiscount(partner.discount, userPlan);

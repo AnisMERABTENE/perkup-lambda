@@ -3,7 +3,9 @@ import {
   apolloClient, 
   clearPartnersCache, 
   clearSubscriptionCache, 
-  refreshSubscriptionData 
+  clearUserCache,
+  refreshUserRelatedData,
+  refreshPartners
 } from '@/graphql/apolloClient';
 import { API_CONFIG, WEBSOCKET_CONFIG } from '@/constants/Config';
 import { GET_PARTNERS, PartnersResponse } from '@/graphql/queries/partners';
@@ -207,9 +209,14 @@ class WebSocketClient {
   private subscriptions: string[] = WEBSOCKET_CONFIG.DEFAULT_SUBSCRIPTIONS;
   private listeners: { [eventType: string]: Function[] } = {};
   private isConnecting = false;
+  private currentUserId: string | null = null;
   
   constructor() {
     this.connect();
+  }
+
+  public setCurrentUserId(id: string | null) {
+    this.currentUserId = id;
   }
   
   /**
@@ -292,9 +299,13 @@ class WebSocketClient {
           this.handlePartnerUpdate(message);
           break;
           
-        case 'cache_invalidated':
-          this.handleCacheInvalidation(message);
-          break;
+      case 'cache_invalidated':
+        this.handleCacheInvalidation(message);
+        break;
+        
+      case 'server_log':
+        console.log('🖥️ Server log:', message.log);
+        break;
         
         case 'subscription_updated':
           this.handleSubscriptionUpdate(message);
@@ -682,15 +693,36 @@ class WebSocketClient {
   /**
    * 🔔 MISE À JOUR ABONNEMENT
    */
-  handleSubscriptionUpdate(message: any) {
-    console.log('🟢 Abonnement mis à jour:', message.subscription?.status);
-    
+  async handleSubscriptionUpdate(message: any) {
+    const messageUserId = message?.userId;
+    if (messageUserId && this.currentUserId && messageUserId !== this.currentUserId) {
+      console.log('↳ Notification abonnement ignorée (pas pour cet utilisateur)');
+      return;
+    }
+
+    console.log('🟢 Abonnement mis à jour pour l’utilisateur connecté:', messageUserId ?? 'inconnu');
+
+    clearUserCache();
     clearSubscriptionCache();
-    refreshSubscriptionData().catch((error) => {
-      console.error('❌ Erreur refresh subscription data:', error);
+
+    const refreshedUser = await refreshUserRelatedData();
+    if (refreshedUser) {
+      this.emit('user_profile_updated', refreshedUser);
+    }
+
+    try {
+      console.log('🧹 Invalidation caches partners après changement de plan');
+      clearPartnersCache();
+      await smartApollo.invalidateQueries(['GetPartners', 'SearchPartners']);
+      await refreshPartners();
+    } catch (cacheError) {
+      console.error('❌ Erreur invalidation/refetch partners:', cacheError);
+    }
+
+    this.emit('subscription_updated', {
+      ...message,
+      refreshedUser
     });
-    
-    this.emit('subscription_updated', message);
   }
   
   /**

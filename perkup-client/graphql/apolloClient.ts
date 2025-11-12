@@ -3,7 +3,13 @@ import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import { RetryLink } from '@apollo/client/link/retry';
 import { API_CONFIG, AUTH_CONFIG, CACHE_CONFIG } from '@/constants/Config';
-import { getAuthToken } from '@/utils/storage';
+import { getAuthToken, saveUserData } from '@/utils/storage';
+import {
+  GET_MY_DIGITAL_CARD,
+  GET_SUBSCRIPTION_STATUS,
+  GET_CARD_USAGE_HISTORY
+} from '@/graphql/queries/digitalCard';
+import { ME_QUERY, MeResponse } from '@/graphql/mutations/auth';
 
 // ✅ URL de votre API GraphQL déployée sur AWS
 const BACKEND_URL = API_CONFIG.GRAPHQL_URL;
@@ -11,10 +17,20 @@ const BACKEND_URL = API_CONFIG.GRAPHQL_URL;
 // 🔗 Lien HTTP optimisé
 const httpLink = createHttpLink({
   uri: BACKEND_URL,
-  // ✅ Headers optimisés pour profiter du cache backend
-  headers: {
-    'Cache-Control': 'public, max-age=300', // 5min cache navigateur
-  }
+});
+const cacheControlLink = setContext((operation, { headers }) => {
+  const cacheableOps = new Set(['GetPartners', 'SearchPartners', 'GetCities', 'GetCategories']);
+  const operationName = operation.operationName || '';
+  const cacheHeader = cacheableOps.has(operationName)
+    ? 'public, max-age=300'
+    : 'no-cache, no-store, must-revalidate';
+
+  return {
+    headers: {
+      ...headers,
+      'Cache-Control': cacheHeader
+    }
+  };
 });
 
 // 🔄 Retry link pour résilience
@@ -103,7 +119,7 @@ const authLink = setContext(async (_, { headers }) => {
 
 // 🚀 Client Apollo ULTRA-OPTIMISÉ pour votre cache backend
 export const apolloClient = new ApolloClient({
-  link: from([errorLink, retryLink, authLink, httpLink]),
+  link: from([errorLink, retryLink, authLink, cacheControlLink, httpLink]),
   
   // ✅ CACHE INTELLIGENT configuré pour profiter du backend
   cache: new InMemoryCache({
@@ -238,13 +254,50 @@ export const clearSubscriptionCache = () => {
   apolloClient.cache.gc();
 };
 
+export const clearUserCache = () => {
+  console.log('🧹 Nettoyage cache utilisateur (me)');
+  apolloClient.cache.evict({ fieldName: 'me' });
+  apolloClient.cache.gc();
+};
+
 export const refreshSubscriptionData = async () => {
   try {
-    await apolloClient.refetchQueries({
-      include: ['GetSubscriptionStatus', 'GetMyDigitalCard', 'GetCardUsageHistory']
-    });
+    await Promise.all([
+      apolloClient.query({
+        query: GET_SUBSCRIPTION_STATUS,
+        fetchPolicy: 'network-only'
+      }),
+      apolloClient.query({
+        query: GET_MY_DIGITAL_CARD,
+        fetchPolicy: 'network-only'
+      }),
+      apolloClient.query({
+        query: GET_CARD_USAGE_HISTORY,
+        fetchPolicy: 'network-only'
+      })
+    ]);
   } catch (error) {
     console.error('❌ Erreur refresh subscription:', error);
+  }
+};
+
+export const refreshUserRelatedData = async (): Promise<MeResponse['me'] | null> => {
+  try {
+    const result = await apolloClient.query<MeResponse>({
+      query: ME_QUERY,
+      fetchPolicy: 'network-only'
+    });
+
+    const updatedUser = result?.data?.me ?? null;
+    if (updatedUser) {
+      await saveUserData(updatedUser);
+    }
+
+    await refreshSubscriptionData();
+    return updatedUser;
+  } catch (error) {
+    console.error('❌ Erreur refresh utilisateur:', error);
+    return null;
   }
 };
 

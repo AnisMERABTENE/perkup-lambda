@@ -174,6 +174,19 @@ export const getPlanDisplayName = (plan?: string): string => {
   }
 };
 
+export const getPlanDiscountLimit = (plan?: string): number => {
+  switch (plan?.toLowerCase()) {
+    case 'basic':
+      return 5;
+    case 'super':
+      return 10;
+    case 'premium':
+      return Number.POSITIVE_INFINITY;
+    default:
+      return 0;
+  }
+};
+
 // 🔄 Calculer le pourcentage de progression du countdown
 export const getCountdownProgress = (timeRemaining: number, total: number = 30): number => {
   return Math.max(0, Math.min(1, timeRemaining / total));

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useLazyQuery } from '@apollo/client/react';
 import { 
   GET_PARTNERS, 
@@ -16,6 +16,7 @@ import { smartApollo } from '@/services/SmartApolloWrapper';
 import { getUserData } from '@/utils/storage';
 import { usePartnerUpdates } from './useWebSocket';
 import { useAuthContext } from '@/providers/AuthProvider';
+import { wsClient } from '@/services/WebSocketClient';
 
 interface UsePartnersOptions {
   // Filtres de base
@@ -135,7 +136,7 @@ const getPlanDiscountLimit = (plan?: string) => {
  */
 export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartnersReturn => {
   // 🔐 VÉRIFICATION AUTHENTIFICATION AVANT TOUT
-  const { isAuthenticated, isLoading: authLoading } = useAuthContext();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuthContext();
   
   const {
     category,
@@ -315,6 +316,23 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
     }
   }, [enableIntelligentCache, shouldSkipPartnersQueries, useSearchQuery, lat, lng, radius, category, city, searchQuery, limit]);
   // ✅ CORRECTION: Retiré lastRefreshTime des deps pour stabiliser la fonction
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+
+    const unsubscribe = wsClient.on('subscription_updated', () => {
+      console.log('🔁 usePartnersProtected - subscription_updated reçu, rafraîchissement partenaires');
+      clearPartnersCache();
+      refetchPartners({ fetchPolicy: 'network-only' }).catch((error) => {
+        console.error('❌ Erreur refetch partenaires après subscription_updated:', error);
+      });
+      loadDataWithSmartCache(true).catch((error) => {
+        console.error('❌ Erreur smart refresh partenaires après subscription_updated:', error);
+      });
+    });
+
+    return unsubscribe;
+  }, [isAuthenticated, user?.id, refetchPartners, loadDataWithSmartCache]);
 
   // 🎯 Précharger données critiques - 🔐 PROTÉGÉ
   useEffect(() => {
@@ -503,6 +521,37 @@ export const usePartnersProtected = (options: UsePartnersOptions = {}): UsePartn
   }, [isAuthenticated, useSmartCache, smartData, useSearchQuery, searchData, partnersData, categoriesData, citiesData, cachedCategories, cachedCities]);
   // ✅ CORRECTION: useMemo optimisé pour éviter les recalculs inutiles
   
+  const previousPlanRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const nextPlan = finalData.userPlan || 'free';
+    const previousPlan = previousPlanRef.current || 'free';
+    if (nextPlan && previousPlan && previousPlan !== nextPlan) {
+      console.log('🔁 usePartnersProtected - plan détecté différemment, invalidation cache partenaires');
+      clearPartnersCache();
+      refetchPartners({ fetchPolicy: 'network-only' })
+        .catch((error) => {
+          console.error('❌ Erreur refetch partenaires après changement de plan:', error);
+        });
+
+      if (useSmartCache && enableIntelligentCache) {
+        loadDataWithSmartCache(true).catch((error) => {
+          console.error('❌ Erreur smart cache après changement de plan:', error);
+        });
+      }
+    }
+
+    if (nextPlan) {
+      previousPlanRef.current = nextPlan;
+    }
+  }, [
+    finalData.userPlan,
+    enableIntelligentCache,
+    loadDataWithSmartCache,
+    refetchPartners,
+    useSmartCache
+  ]);
+
   const partnersWithRealtime = useMemo(() => {
     const snapshotEntries = Object.values(partnerSnapshots || {});
     if (!snapshotEntries || snapshotEntries.length === 0) {

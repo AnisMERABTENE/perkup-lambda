@@ -274,10 +274,11 @@ async function handleSubscriptionUpdated(subscription) {
 }
 
 async function handleSubscriptionDeleted(subscription) {
+  const subscriptionId = subscription.id;
   const customerId = subscription.customer;
 
   const updatedUser = await User.findOneAndUpdate(
-    { 'subscription.stripeCustomerId': customerId },
+    { 'subscription.stripeSubscriptionId': subscriptionId },
     {
       $set: {
         'subscription.status': 'canceled',
@@ -287,15 +288,20 @@ async function handleSubscriptionDeleted(subscription) {
     { new: true }
   );
 
-  console.log(`Abonnement annulé - Customer: ${customerId}`);
-
-  if (updatedUser) {
-    await propagateSubscriptionChange(updatedUser, {
-      plan: updatedUser.subscription?.plan,
-      status: 'canceled',
-      endDate: updatedUser.subscription?.endDate?.toISOString?.() || new Date().toISOString()
-    });
+  if (!updatedUser) {
+    console.log(
+      `Ignorer subscription.deleted (${subscriptionId}) - pas l'abonnement actif actuel`
+    );
+    return;
   }
+
+  console.log(`Abonnement annulé - Subscription: ${subscriptionId}, Customer: ${customerId}`);
+
+  await propagateSubscriptionChange(updatedUser, {
+    plan: updatedUser.subscription?.plan,
+    status: 'canceled',
+    endDate: updatedUser.subscription?.endDate?.toISOString?.() || new Date().toISOString()
+  });
 }
 
 async function handlePaymentIntentSucceeded(paymentIntent) {
@@ -398,20 +404,33 @@ function getPlanFromSubscription(subscription) {
 async function propagateSubscriptionChange(userDoc, subscriptionInfo) {
   if (!userDoc) return;
   const userId = userDoc._id ? userDoc._id.toString() : userDoc.id;
-  
+
   try {
+    console.log('🔄 Invalidation cache abonnement déclenchée', { userId });
     await Promise.all([
       SubscriptionCache.invalidateSubscription(userId),
       UserCache.invalidateAllUserCache(userId, userDoc.email)
     ]);
+    console.log('✅ Cache abonnement invalidé pour', { userId });
+    console.log('📣 Envoi notification subscription_updated', { userId, plan: subscriptionInfo.plan });
     
     await websocketService.notifyUser(userId, {
       type: 'subscription_updated',
+      userId,
       subscription: {
         ...subscriptionInfo,
         updatedAt: new Date().toISOString()
-      }
+      },
+      invalidateQueries: [
+        'me',
+        'GetSubscriptionStatus',
+        'GetMyDigitalCard',
+        'GetCardUsageHistory',
+        'GetSubscriptionPlans'
+      ],
+      targetPage: 'subscription'
     });
+    console.log('📨 Notification subscription_updated envoyée', { userId, plan: subscriptionInfo.plan });
   } catch (error) {
     console.error('❌ Erreur propagation abonnement:', error);
   }

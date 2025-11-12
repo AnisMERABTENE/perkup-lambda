@@ -18,6 +18,10 @@ import { generateLeafletHTML } from '@/utils/leafletHTML';
 import { PartnerFilters } from '@/components/PartnerFilters';
 import { buildCityGroupsFromList } from '@/utils/cityGroups';
 import { useTranslation } from '@/providers/I18nProvider';
+import { getPlanDisplayName, getPlanDiscountLimit } from '@/utils/cardUtils';
+import { clearPartnersCache } from '@/graphql/apolloClient';
+import { smartApollo } from '@/services/SmartApolloWrapper';
+import { wsClient } from '@/services/WebSocketClient';
 
 const formatCategoryLabel = (value: string) =>
   value
@@ -65,7 +69,8 @@ export default function MapsScreen() {
     refetch,
     isAuthenticated,
     authLoading,
-    totalFound
+    totalFound,
+    userPlan
   } = usePartnersProtected({
     category: '',
     enableCache: true,
@@ -74,6 +79,53 @@ export default function MapsScreen() {
     forceRefresh: false,
     skipQueries: !isFocused
   });
+
+  useEffect(() => {
+    if (isFocused && isAuthenticated) {
+      clearPartnersCache();
+      refetch({
+        fetchPolicy: 'network-only'
+      }).catch(error => {
+        console.error('❌ Erreur refetch map lors du focus:', error);
+      });
+    }
+  }, [isFocused, isAuthenticated, refetch]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleSubscriptionUpdate = () => {
+      console.log('🪪 onglet maps - subscription_updated reçu, invalidation cache');
+      clearPartnersCache();
+      smartApollo
+        .invalidateQueries(['GetPartners', 'SearchPartners'])
+        .catch((error) => {
+          console.error('❌ Erreur invalidation smart cache maps:', error);
+        });
+      refetch({
+        fetchPolicy: 'network-only'
+      }).catch((error) => {
+        console.error('❌ Erreur refetch maps après subscription_updated:', error);
+      });
+    };
+
+    const unsubscribe = wsClient.on('subscription_updated', handleSubscriptionUpdate);
+    return unsubscribe;
+  }, [isAuthenticated, refetch]);
+
+  const [planBanner, setPlanBanner] = useState({
+    plan: userPlan || 'free',
+    updatedAt: Date.now()
+  });
+  const planLimit = getPlanDiscountLimit(userPlan);
+
+  useEffect(() => {
+    if (!userPlan) return;
+    if (planBanner.plan !== userPlan) {
+      console.log('🗺️ Nouvel affichage partenaires – plan:', userPlan);
+      setPlanBanner({ plan: userPlan, updatedAt: Date.now() });
+    }
+  }, [userPlan, planBanner.plan]);
 
   // Log des erreurs
   useEffect(() => {
@@ -363,6 +415,19 @@ export default function MapsScreen() {
         </TouchableOpacity>
       </View>
 
+      {userPlan && (
+        <View style={styles.planBanner}>
+          <Text style={styles.planBannerTitle}>
+            {t('maps_plan_label', { plan: getPlanDisplayName(userPlan) })}
+          </Text>
+          <Text style={styles.planBannerSubtitle}>
+            {planLimit === Number.POSITIVE_INFINITY
+              ? t('maps_plan_discount_unlimited')
+              : t('maps_plan_discount_limit', { limit: `${planLimit}%` })}
+          </Text>
+        </View>
+      )}
+
       {/* Carte WebView */}
       <WebView
         ref={webViewRef}
@@ -441,6 +506,26 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: AppColors.textSecondary,
+  },
+  planBanner: {
+    backgroundColor: AppColors.surfaceSecondary,
+    marginHorizontal: 20,
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  planBannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: AppColors.text,
+  },
+  planBannerSubtitle: {
+    fontSize: 14,
+    color: AppColors.textSecondary,
+    marginTop: 4,
   },
   webView: {
     flex: 1,

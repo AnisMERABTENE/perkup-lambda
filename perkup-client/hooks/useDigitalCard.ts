@@ -155,11 +155,11 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
   const refreshAll = useCallback(async () => {
     try {
       console.log('🔄 Refresh complet...');
-      await Promise.all([
-        refetchSubscription(),
-        refetchCard(),
-        refetchUsage()
-      ]);
+    await Promise.all([
+      refetchSubscription({ fetchPolicy: 'network-only' }),
+      refetchCard({ fetchPolicy: 'network-only' }),
+      refetchUsage({ fetchPolicy: 'network-only' })
+    ]);
     } catch (error) {
       console.error('❌ Erreur refresh complet:', error);
     }

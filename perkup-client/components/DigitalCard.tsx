@@ -56,6 +56,36 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     }
   }, [cardData, hasLoadedCard]);
 
+  const previousSubscriptionRef = useRef<{
+    plan?: string | null;
+    status?: string | null;
+  }>({ plan: null, status: null });
+
+  useEffect(() => {
+    const currentPlan = subscriptionStatus?.subscription?.plan ?? null;
+    const currentStatus = subscriptionStatus?.subscription?.status ?? null;
+    const { plan: previousPlan, status: previousStatus } = previousSubscriptionRef.current;
+
+    if (currentPlan && (previousPlan !== currentPlan || previousStatus !== currentStatus)) {
+      console.log('🪪 Carte digitale - subscription updated', {
+        from: { plan: previousPlan, status: previousStatus },
+        to: { plan: currentPlan, status: currentStatus },
+      });
+
+      (async () => {
+        await refreshAll();
+        await refetchCard({ fetchPolicy: 'network-only' });
+      })().catch((err) => {
+        console.error('❌ Erreur refresh carte après mise à jour abonnement:', err);
+      });
+    }
+
+    previousSubscriptionRef.current = {
+      plan: currentPlan,
+      status: currentStatus,
+    };
+  }, [subscriptionStatus, refreshAll, refetchCard]);
+
   // 🎬 Animations
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const scaleAnimation = useRef(new Animated.Value(1)).current;

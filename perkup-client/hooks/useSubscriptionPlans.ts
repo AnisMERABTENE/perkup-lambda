@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useStripe } from '@stripe/stripe-react-native';
 import { useMutation, useQuery } from '@apollo/client/react';
@@ -32,6 +32,7 @@ interface UseSubscriptionPlansResult {
   selectingPlan: SubscriptionPlan['plan'] | null;
   selectPlan: (plan: SubscriptionPlan['plan']) => Promise<void>;
   refreshPlans: () => Promise<void>;
+  subscriptionStatus: SubscriptionStatusResponse['getSubscriptionStatus'] | null;
 }
 
 export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
@@ -54,7 +55,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
     loading: statusLoading,
     refetch: refetchSubscriptionStatus,
   } = useQuery<SubscriptionStatusResponse>(GET_SUBSCRIPTION_STATUS, {
-    fetchPolicy: 'cache-first',
+    fetchPolicy: 'network-only',
     notifyOnNetworkStatusChange: true,
   });
 
@@ -63,17 +64,14 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
   const plans = plansData?.getSubscriptionPlans?.plans ?? [];
   const currency = plansData?.getSubscriptionPlans?.currency ?? 'EUR';
 
-  const currentPlan =
-    subscriptionStatusData?.getSubscriptionStatus?.subscription?.plan ??
-    plansData?.getSubscriptionPlans?.currentPlan ??
-    null;
+  const currentPlan = subscriptionStatusData?.getSubscriptionStatus?.subscription?.plan ?? null;
 
   const refreshPlans = useCallback(async () => {
     clearSubscriptionCache();
     await refreshSubscriptionData();
     await Promise.all([
-      refetchPlansQuery(),
-      refetchSubscriptionStatus(),
+      refetchPlansQuery({ fetchPolicy: 'network-only' }),
+      refetchSubscriptionStatus({ fetchPolicy: 'network-only' }),
     ]);
   }, [refetchPlansQuery, refetchSubscriptionStatus]);
 
@@ -138,6 +136,19 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
     }
   }, [createSubscriptionMutation, initPaymentSheet, presentPaymentSheet, refreshPlans]);
 
+  const previousStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    const latestPlan = subscriptionStatusData?.getSubscriptionStatus?.subscription?.plan;
+    if (latestPlan && previousStatusRef.current && previousStatusRef.current !== latestPlan) {
+      refetchPlansQuery({ fetchPolicy: 'network-only' }).catch((error) => {
+        console.error('❌ Erreur refetch plans après changement de plan:', error);
+      });
+    }
+    if (latestPlan) {
+      previousStatusRef.current = latestPlan;
+    }
+  }, [subscriptionStatusData, refetchPlansQuery]);
+
   useEffect(() => {
     const unsubscribe = wsClient.on('subscription_updated', () => {
       refreshPlans().catch((err) => {
@@ -161,6 +172,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
       selectingPlan,
       selectPlan,
       refreshPlans,
+      subscriptionStatus: subscriptionStatusData?.getSubscriptionStatus ?? null,
     }),
     [
       plans,
@@ -171,6 +183,7 @@ export const useSubscriptionPlans = (): UseSubscriptionPlansResult => {
       selectingPlan,
       selectPlan,
       refreshPlans,
+      subscriptionStatusData,
     ]
   );
 };

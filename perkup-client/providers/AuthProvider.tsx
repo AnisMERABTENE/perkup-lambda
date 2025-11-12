@@ -49,6 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (isTokenValid) {
           console.log('✅ Utilisateur authentifié:', userData.email);
           setUser(userData);
+          wsClient.setCurrentUserId(userData.id ?? userData._id ?? null);
           setIsAuthenticated(true);
         } else {
           console.log('❌ Token expiré, nettoyage...');
@@ -121,6 +122,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       clearAuthCache();
       await clearAuthData();
       wsClient.disconnect();
+      wsClient.setCurrentUserId(null);
       
       // Réinitialiser l'état
       setIsAuthenticated(false);
@@ -135,6 +137,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateUser = async (updates: Record<string, any>) => {
     const nextUser = { ...(user || {}), ...updates };
     setUser(nextUser);
+    wsClient.setCurrentUserId(nextUser.id ?? nextUser._id ?? null);
     try {
       await saveUserData(nextUser);
     } catch (error) {
@@ -187,6 +190,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } else {
       wsClient.disconnect();
     }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const handleProfileUpdate = async (updatedUser: any) => {
+      if (!updatedUser) return;
+
+      setUser(updatedUser);
+      wsClient.setCurrentUserId(updatedUser.id ?? updatedUser._id ?? null);
+
+      try {
+        await saveUserData(updatedUser);
+      } catch (error) {
+        console.error('❌ Erreur sauvegarde user après mise à jour de profil:', error);
+      }
+    };
+
+    const unsubscribe = wsClient.on('user_profile_updated', handleProfileUpdate);
+    return unsubscribe;
   }, [isAuthenticated]);
 
   // 📱 Affichage de chargement pendant la vérification

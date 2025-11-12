@@ -14,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@apollo/client/react';
 
+import { wsClient } from '@/services/WebSocketClient';
+
 import AppColors from '@/constants/Colors';
 import { GET_PARTNER_DETAIL } from '@/graphql/queries/partners';
 
@@ -60,6 +62,16 @@ export default function PartnerDetailScreen() {
       });
     }
   }, [partnerData]);
+
+  React.useEffect(() => {
+    const unsubscribe = wsClient.on('subscription_updated', () => {
+      refetch({ fetchPolicy: 'network-only' }).catch((error) => {
+        console.error('❌ Erreur refetch partenaire après changement de plan:', error);
+      });
+    });
+
+    return unsubscribe;
+  }, [refetch]);
 
   const handleCall = () => {
     if (partnerData?.phone) {
