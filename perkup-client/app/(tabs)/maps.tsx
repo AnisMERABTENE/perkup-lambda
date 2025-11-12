@@ -9,7 +9,6 @@ import {
   Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { usePartnersProtected } from '@/hooks/usePartnersProtected';
@@ -54,9 +53,6 @@ export default function MapsScreen() {
   const [selectedCityGroupKey, setSelectedCityGroupKey] = useState<string | null>(null);
   const { t } = useTranslation();
   
-  // 🎯 OPTIMISATION: Désactiver le hook si la page n'est pas focus
-  const isFocused = useIsFocused();
-
   // 📍 RÉCUPÉRER LES PARTENAIRES AVEC PROTECTION AUTH + FOCUS
   const { 
     partners,
@@ -75,21 +71,10 @@ export default function MapsScreen() {
     category: '',
     enableCache: true,
     enableIntelligentCache: true,
-    preloadData: isFocused,
+    preloadData: true,
     forceRefresh: false,
-    skipQueries: !isFocused
+    skipQueries: false
   });
-
-  useEffect(() => {
-    if (isFocused && isAuthenticated) {
-      clearPartnersCache();
-      refetch({
-        fetchPolicy: 'network-only'
-      }).catch(error => {
-        console.error('❌ Erreur refetch map lors du focus:', error);
-      });
-    }
-  }, [isFocused, isAuthenticated, refetch]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

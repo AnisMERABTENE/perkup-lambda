@@ -11,7 +11,6 @@ import {
   Image,
 } from 'react-native';
 import { router } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -43,9 +42,6 @@ export default function PartnersScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCityGroupKey, setSelectedCityGroupKey] = useState<string | null>(null);
-  
-  // 🎯 OPTIMISATION: Désactiver le hook si la page n'est pas focus
-  const isFocused = useIsFocused();
   const { t } = useTranslation();
 
   const {
@@ -64,27 +60,16 @@ export default function PartnersScreen() {
     authLoading
   } = usePartnersProtected({
     category: '',
-    enableCache: true, // ✅ Cache activé avec protection
-    enableIntelligentCache: true, // ✅ Optimisation avec protection
-    preloadData: isFocused, // ✅ Préchargement SEULEMENT si focus
-    forceRefresh: false, // ✅ Cache en priorité
-    skipQueries: !isFocused // ✅ NOUVEAU: Skip si pas focus
+    enableCache: true,
+    enableIntelligentCache: true,
+    preloadData: true,
+    forceRefresh: false,
+    skipQueries: false
   });
 
   useEffect(() => {
     loadUserData();
   }, []);
-
-  useEffect(() => {
-    if (isFocused && isAuthenticated) {
-      clearPartnersCache();
-      refetchPartners({
-        fetchPolicy: 'network-only'
-      }).catch(error => {
-        console.error('❌ Erreur refetch partenaires au focus :', error);
-      });
-    }
-  }, [isFocused, isAuthenticated, refetchPartners]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
