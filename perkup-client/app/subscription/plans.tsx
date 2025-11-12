@@ -35,7 +35,7 @@ const SubscriptionPlansScreen: React.FC = () => {
   const [lastStatus, setLastStatus] = React.useState<string | null>(null);
   const latestPlan = subscriptionStatus?.subscription?.plan ?? currentPlan;
   const latestStatus = subscriptionStatus?.subscription?.status ?? 'unknown';
-  const activePlanReference = currentPlan ?? subscriptionStatus?.subscription?.plan ?? null;
+  const activePlanReference = currentPlan ?? null;
   const prevPlanRef = React.useRef<string | null>(null);
   const prevStatusRef = React.useRef<string | null>(null);
 
@@ -144,7 +144,7 @@ const SubscriptionPlansScreen: React.FC = () => {
             <SubscriptionPlanCard
               key={plan.plan}
               plan={plan}
-              isCurrent={plan.plan === (activePlanReference ?? plan.plan)}
+              isCurrent={Boolean(activePlanReference && plan.plan === activePlanReference)}
               isProcessing={selectingPlan === plan.plan}
               onSelect={selectPlan}
             />
