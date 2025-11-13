@@ -7,7 +7,9 @@ import {
   Text,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
+import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -35,6 +37,9 @@ interface StoreMarker {
   category: string;
   address: string;
   discount: number;
+  offeredDiscount?: number;
+  userDiscount?: number;
+  userPlan?: string;
   latitude: number;
   longitude: number;
 }
@@ -48,6 +53,8 @@ export default function MapsScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCityGroupKey, setSelectedCityGroupKey] = useState<string | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<StoreMarker | null>(null);
+  const [partnerModalVisible, setPartnerModalVisible] = useState(false);
   const { t } = useTranslation();
   
   // 📍 RÉCUPÉRER LES PARTENAIRES AVEC PROTECTION AUTH + FOCUS
@@ -183,7 +190,10 @@ export default function MapsScreen() {
             name: partner.name,
             category: partner.category,
             address: `${partner.address}, ${partner.city}`,
-            discount: partner.userDiscount || partner.offeredDiscount || partner.discount || 10,
+            discount: partner.offeredDiscount || partner.discount || 10,
+            offeredDiscount: partner.offeredDiscount || partner.discount || 10,
+            userDiscount: partner.userDiscount || 0,
+            userPlan: userPlan,
             latitude: partner.location.latitude,
             longitude: partner.location.longitude,
           });
@@ -290,8 +300,12 @@ export default function MapsScreen() {
         `;
         webViewRef.current?.postMessage(jsCode);
       }
-      // 🚫 SUPPRIMÉ: La modal Alert.alert() avec bouton "OK"
-      // Maintenant seul le popup Leaflet (avec badge vert) s'affichera
+      
+      if (message.type === 'markerClick') {
+        const partnerData = message.data;
+        setSelectedPartner(partnerData);
+        setPartnerModalVisible(true);
+      }
     } catch (error) {
       console.error('Erreur parsing message:', error);
     }
@@ -424,6 +438,86 @@ export default function MapsScreen() {
       >
         <Ionicons name="refresh-outline" size={24} color={AppColors.white} />
       </TouchableOpacity>
+
+      {/* Modal pour les détails du partenaire */}
+      <Modal
+        visible={partnerModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPartnerModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setPartnerModalVisible(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            {selectedPartner && (
+              <>
+                {/* Header avec bouton fermer seulement */}
+                <View style={styles.modalHeader}>
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => setPartnerModalVisible(false)}
+                  >
+                    <Ionicons name="close" size={20} color={AppColors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Section principale - nom, catégorie et réductions */}
+                <View style={styles.discountSection}>
+                  {/* Nom du magasin */}
+                  <Text style={styles.storeName}>{selectedPartner.name}</Text>
+                  
+                  {/* Catégorie */}
+                  <Text style={styles.storeCategory}>{formatCategoryLabel(selectedPartner.category)}</Text>
+                  
+                  <Text style={styles.mainDiscountText}>
+                    Le magasin offre <Text style={styles.discountHighlight}>{selectedPartner.offeredDiscount}%</Text> de réduction
+                  </Text>
+                  
+                  {userPlan && userPlan !== 'free' ? (
+                    selectedPartner.userDiscount && selectedPartner.userDiscount > 0 ? (
+                      <>
+                        <Text style={styles.userBenefitText}>
+                          Grâce à votre offre <Text style={styles.planHighlight}>{getPlanDisplayName(userPlan)}</Text>, vous disposez de{' '}
+                          <Text style={styles.benefitHighlight}>{selectedPartner.userDiscount}%</Text> de réduction chez ce partenaire.
+                        </Text>
+                        {selectedPartner.userDiscount < selectedPartner.offeredDiscount && (
+                          <Text style={styles.upgradeHint}>
+                            💎 Passez à l'offre Premium pour avoir jusqu'à {selectedPartner.offeredDiscount}% de réduction
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <Text style={styles.userBenefitText}>
+                        Grâce à votre formule <Text style={styles.planHighlight}>{getPlanDisplayName(userPlan)}</Text>, vous avez{' '}
+                        <Text style={styles.benefitHighlight}>{selectedPartner.offeredDiscount}%</Text> de réduction chez {selectedPartner.name}.
+                      </Text>
+                    )
+                  ) : (
+                    <Text style={styles.freeUserHint}>
+                      🔓 Souscrivez à un plan pour bénéficier de réductions chez nos partenaires !
+                    </Text>
+                  )}
+                </View>
+
+                {/* Bouton d'action */}
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => {
+                    setPartnerModalVisible(false);
+                    router.push(`/partner/${selectedPartner.id}`);
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Voir le partenaire</Text>
+                  <Ionicons name="arrow-forward" size={18} color={AppColors.white} />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -558,5 +652,126 @@ const styles = StyleSheet.create({
     color: AppColors.textInverse,
     fontWeight: '600',
     fontSize: 14,
+  },
+  // Styles pour la modal - VERSION AMÉLIORÉE
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  modalContent: {
+    backgroundColor: AppColors.white,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 350,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  storeName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: AppColors.text,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: AppColors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storeCategory: {
+    fontSize: 14,
+    color: AppColors.primary,
+    fontWeight: '600',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  discountSection: {
+    backgroundColor: AppColors.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  mainDiscountText: {
+    fontSize: 16,
+    color: AppColors.text,
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+  discountHighlight: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: AppColors.primary,
+  },
+  userBenefitText: {
+    fontSize: 15,
+    color: AppColors.success,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  planHighlight: {
+    fontWeight: '700',
+    color: AppColors.primary,
+  },
+  benefitHighlight: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: AppColors.success,
+  },
+  upgradeHint: {
+    fontSize: 13,
+    color: AppColors.warning,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  freeUserHint: {
+    fontSize: 15,
+    color: AppColors.textSecondary,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  actionButton: {
+    backgroundColor: AppColors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: AppColors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  actionButtonText: {
+    color: AppColors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

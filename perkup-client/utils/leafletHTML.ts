@@ -171,11 +171,13 @@ export const generateLeafletHTML = (initialPosition: { latitude: number; longitu
     
     // Fonction pour ajouter un marqueur de magasin
     function addStoreMarker(store) {
-      const colorClass = getDiscountColor(store.discount);
-      const colorHex = getDiscountColorHex(store.discount);
+      // Utilise toujours le discount offert par le partenaire (pas userDiscount)
+      const offeredDiscount = store.offeredDiscount || store.discount;
+      const colorClass = getDiscountColor(offeredDiscount);
+      const colorHex = getDiscountColorHex(offeredDiscount);
       
       const markerHtml = '<div class="store-marker ' + colorClass + '">' + 
-                        store.discount + '%' +
+                        offeredDiscount + '%' +
                         '</div>';
       
       const icon = L.divIcon({
@@ -188,20 +190,7 @@ export const generateLeafletHTML = (initialPosition: { latitude: number; longitu
       const marker = L.marker([store.latitude, store.longitude], { icon: icon })
         .addTo(storesLayer);
       
-      // Popup au clic
-      const popupContent = 
-        '<div>' +
-        '<div class="popup-title">' + store.name + '</div>' +
-        '<div class="popup-category">' + store.category + '</div>' +
-        '<div class="popup-address">' + store.address + '</div>' +
-        '<div class="popup-discount" style="background:' + colorHex + '">' + 
-        store.discount + '% de réduction' +
-        '</div>' +
-        '</div>';
-      
-      marker.bindPopup(popupContent);
-      
-      // Envoyer un message à React Native au clic
+      // Pas de popup Leaflet - on envoie directement le clic à React Native
       marker.on('click', function() {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'markerClick',
