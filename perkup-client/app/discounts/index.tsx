@@ -10,18 +10,39 @@ import {
   SafeAreaView,
   StatusBar
 } from 'react-native';
-import { useLazyQuery } from '@apollo/client/react';
+import { useQuery, useLazyQuery } from '@apollo/client/react';
 import { Ionicons } from '@expo/vector-icons';
 import AppColors from '@/constants/Colors';
 import { formatDate, formatAmount } from '@/utils/cardUtils';
 import { useTranslation } from '@/providers/I18nProvider';
 import { GET_CARD_VALIDATION_HISTORY, CardValidationHistoryResponse, CardValidationRecord } from '@/graphql/queries/digitalCard';
 import { router } from 'expo-router';
+import useDigitalCard from '@/hooks/useDigitalCard'; // 🚀 Import pour synchro cache
 
 const PAGE_LIMIT = 20;
 
 export default function DiscountsHistoryScreen() {
   const { t } = useTranslation();
+  
+  // 🚀 Utilisation du cache existant via useDigitalCard
+  const { cardUsage } = useDigitalCard();
+  
+  // 🔄 Query de base pour écouter les changements de cache
+  const { data: cacheData, loading: cacheLoading } = useQuery(
+    GET_CARD_VALIDATION_HISTORY,
+    {
+      variables: {
+        input: {
+          page: 1,
+          limit: 10, // Juste pour le cache
+          category: null
+        }
+      },
+      fetchPolicy: 'cache-only', // 🚀 Seulement le cache
+      errorPolicy: 'ignore', // Ignorer erreurs si pas de cache
+    }
+  );
+  
   const [history, setHistory] = useState<CardValidationRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -35,13 +56,15 @@ export default function DiscountsHistoryScreen() {
   const [loadHistory, { loading, error }] = useLazyQuery<CardValidationHistoryResponse>(
     GET_CARD_VALIDATION_HISTORY,
     {
-      fetchPolicy: 'network-only',
-      notifyOnNetworkStatusChange: true
+      fetchPolicy: 'cache-first', // 🚀 Optimisation: cache en priorité
+      nextFetchPolicy: 'cache-first', // Garde le cache après refetch
+      notifyOnNetworkStatusChange: false, // Éviter re-renders inutiles
+      errorPolicy: 'all'
     }
   );
 
   const queryHistoryPage = useCallback(
-    async (targetPage = 1, replace = false) => {
+    async (targetPage = 1, replace = false, forceRefresh = false) => {
       if (targetPage === 1) {
         setIsRefreshing(true);
       } else {
@@ -56,7 +79,9 @@ export default function DiscountsHistoryScreen() {
               limit: PAGE_LIMIT,
               category: categoryFilter || null
             }
-          }
+          },
+          // 🚀 Optimisation: force network seulement si nécessaire
+          fetchPolicy: forceRefresh ? 'network-only' : 'cache-first'
         });
 
         const payload = response.data?.getCardValidationHistory;
@@ -82,9 +107,69 @@ export default function DiscountsHistoryScreen() {
     [categoryFilter, loadHistory]
   );
 
+  // 🚀 Initialisation avec données du cache si disponibles
+  useEffect(() => {
+    if (cardUsage?.usage?.recentUsage && history.length === 0) {
+      console.log('🚀 Pre-remplissage avec cache existant');
+      const cachedHistory = cardUsage.usage.recentUsage.map(item => ({
+        ...item,
+        id: item.token || `cached_${Date.now()}`
+      }));
+      setHistory(cachedHistory as CardValidationRecord[]);
+      setTotalSavings(cardUsage.usage.totalSavings || 0);
+      setTotalCount(cardUsage.usage.totalScans || 0);
+      
+      // Extraire les categories des donnees cached
+      const cacheCategories = Array.from(
+        new Set(
+          cachedHistory
+            .map(item => item.partner?.category)
+            .filter(Boolean)
+        )
+      ) as string[];
+      setCategories(cacheCategories);
+    }
+  }, [cardUsage, history.length]);
+
+  // 🚀 Écouter les changements de cache et synchroniser
+  useEffect(() => {
+    if (cacheData?.getCardValidationHistory?.items) {
+      const newItems = cacheData.getCardValidationHistory.items;
+      
+      // Vérifier s'il y a de nouveaux éléments
+      const currentTokens = new Set(history.map(item => item.token));
+      const hasNewItems = newItems.some(item => !currentTokens.has(item.token));
+      
+      if (hasNewItems && history.length > 0) {
+        console.log('🚀 Nouveaux éléments détectés dans le cache, mise à jour automatique');
+        
+        // Fusionner avec l'historique existant sans doublons
+        const mergedHistory = [...newItems];
+        
+        // Ajouter les anciens éléments qui ne sont pas déjà dans newItems
+        const newTokens = new Set(newItems.map(item => item.token));
+        history.forEach(oldItem => {
+          if (!newTokens.has(oldItem.token)) {
+            mergedHistory.push(oldItem);
+          }
+        });
+        
+        setHistory(mergedHistory);
+        
+        // Mettre à jour les stats aussi
+        if (cacheData.getCardValidationHistory.total) {
+          setTotalCount(cacheData.getCardValidationHistory.total);
+        }
+        if (cacheData.getCardValidationHistory.totalSavings) {
+          setTotalSavings(cacheData.getCardValidationHistory.totalSavings);
+        }
+      }
+    }
+  }, [cacheData, history]);
+
   useEffect(() => {
     setHistory([]);
-    queryHistoryPage(1, true);
+    queryHistoryPage(1, true, false); // 🚀 Pas de forceRefresh au changement de filtre
   }, [categoryFilter, queryHistoryPage]);
 
   const handleLoadMore = useCallback(() => {
@@ -149,7 +234,15 @@ export default function DiscountsHistoryScreen() {
       <StatusBar barStyle="dark-content" backgroundColor={AppColors.background} />
 
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-back" size={24} color={AppColors.text} />
+        </TouchableOpacity>
+        
+        <View style={styles.headerContent}>
           <Text style={styles.title}>{t('discounts_page_title')}</Text>
           <Text style={styles.stats}>
             {t('discounts_total_label', {
@@ -209,7 +302,11 @@ export default function DiscountsHistoryScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={() => queryHistoryPage(1, true)} tintColor={AppColors.primary} />
+          <RefreshControl 
+            refreshing={isRefreshing} 
+            onRefresh={() => queryHistoryPage(1, true, true)} // 🚀 ForceRefresh au pull-to-refresh
+            tintColor={AppColors.primary} 
+          />
         }
         ListEmptyComponent={
           isEmpty && (
@@ -239,9 +336,24 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 12,
+    gap: 12,
+  },
+
+  backButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+
+  headerContent: {
+    flex: 1,
   },
   title: {
     fontSize: 24,

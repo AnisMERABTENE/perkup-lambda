@@ -74,15 +74,19 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     notifyOnNetworkStatusChange: true
   });
 
-  // 📊 Query pour historique d'utilisation (optionnel)
+  // 📊 Query pour historique d'utilisation (avec cache optimisé)
   const { 
     data: usageData, 
     loading: usageLoading,
-    refetch: refetchUsage
+    refetch: refetchUsage,
+    updateQuery
   } = useQuery<CardUsageResponse>(GET_CARD_USAGE_HISTORY, {
     skip: !subscriptionData?.getSubscriptionStatus?.isActive,
     errorPolicy: 'all',
-    fetchPolicy: 'cache-first' // Moins critique, cache plus agressif
+    fetchPolicy: 'cache-first', // Cache agressif
+    nextFetchPolicy: 'cache-first', // Garde le cache après refetch
+    notifyOnNetworkStatusChange: false, // Pas de rerender sur network
+    pollInterval: 0, // Pas de polling automatique
   });
 
   // 🔄 Mutation toggle carte
@@ -152,18 +156,59 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     }
   }, [resetCardMutation]);
 
+  // 🚀 Mise à jour optimisée de l'historique via WebSocket
+  const addNewCouponToHistory = useCallback((newCoupon: any) => {
+    if (!updateQuery) return;
+    
+    console.log('🚀 Ajout coupon a l\'historique en temps reel');
+    
+    updateQuery((prev) => {
+      if (!prev?.getCardUsageHistory) return prev;
+      
+      // Créer l'objet coupon pour l'historique
+      const historyItem = {
+        token: newCoupon.code || `token_${Date.now()}`,
+        usedAt: new Date().toISOString(),
+        amounts: {
+          original: newCoupon.amounts?.original || 0,
+          final: newCoupon.amounts?.final || 0,
+          savings: newCoupon.amounts?.savings || 0
+        },
+        partner: newCoupon.partner || null,
+        validator: newCoupon.validator || null,
+        plan: newCoupon.plan || 'basic'
+      };
+      
+      const currentUsage = prev.getCardUsageHistory.usage;
+      
+      return {
+        ...prev,
+        getCardUsageHistory: {
+          ...prev.getCardUsageHistory,
+          usage: {
+            ...currentUsage,
+            recentUsage: [historyItem, ...(currentUsage.recentUsage || [])],
+            totalScans: (currentUsage.totalScans || 0) + 1,
+            totalSavings: (currentUsage.totalSavings || 0) + (newCoupon.amounts?.savings || 0)
+          }
+        }
+      };
+    });
+  }, [updateQuery]);
+
   const refreshAll = useCallback(async () => {
     try {
       console.log('🔄 Refresh complet...');
-    await Promise.all([
-      refetchSubscription({ fetchPolicy: 'network-only' }),
-      refetchCard({ fetchPolicy: 'network-only' }),
-      refetchUsage({ fetchPolicy: 'network-only' })
-    ]);
+      await Promise.all([
+        refetchSubscription({ fetchPolicy: 'network-only' }),
+        refetchCard({ fetchPolicy: 'network-only' }),
+        // NE PAS refetch l'usage systematiquement
+        // refetchUsage({ fetchPolicy: 'network-only' })
+      ]);
     } catch (error) {
       console.error('❌ Erreur refresh complet:', error);
     }
-  }, [refetchSubscription, refetchCard, refetchUsage]);
+  }, [refetchSubscription, refetchCard]);
 
   useEffect(() => {
     const unsubscribe = wsClient.on('subscription_updated', () => {
@@ -177,8 +222,12 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
       const coupon = message?.coupon;
       if (!coupon) return;
 
-      refreshAll().catch((err) => {
-        console.error('❌ Erreur refresh après coupon:', err);
+      // 🚀 Optimisation: mise a jour cache au lieu de refetch complet
+      addNewCouponToHistory(coupon);
+      
+      // Refresh seulement la carte (pour le nouveau token)
+      refetchCard({ fetchPolicy: 'network-only' }).catch((err) => {
+        console.error('❌ Erreur refresh carte apres coupon:', err);
       });
 
       try {
@@ -199,18 +248,18 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
 
         const messageLines = [
           `Vous payez ${finalLabel} au lieu de ${originalLabel}.`,
-          savingsLabel ? `Économie réalisée : ${savingsLabel}.` : null,
-          `Offre appliquée par ${partnerName}.`
+          savingsLabel ? `Economie realisee : ${savingsLabel}.` : null,
+          `Offre appliquee par ${partnerName}.`
         ].filter(Boolean);
 
-        Alert.alert('Réduction appliquée ✅', messageLines.join('\n'));
+        Alert.alert('Reduction appliquee \u2705', messageLines.join('\n'));
       } catch (alertError) {
         console.error('❌ Erreur affichage alerte coupon:', alertError);
       }
     });
 
     return unsubscribe;
-  }, [refreshAll]);
+  }, [addNewCouponToHistory, refetchCard]);
 
   // 📊 États consolidés
   const loading = subscriptionLoading || cardLoading;

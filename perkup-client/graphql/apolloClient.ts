@@ -185,6 +185,20 @@ export const apolloClient = new ApolloClient({
             merge: false
           }
         }
+      },
+      
+      // 🚀 Historique carte optimisé avec cache intelligent
+      CardUsageHistoryResponse: {
+        keyFields: [],
+        fields: {
+          usage: {
+            merge: true,
+            // Cache pendant 5 minutes pour éviter requêtes répétitives
+            read(existing, { canRead }) {
+              return canRead(existing) ? existing : undefined;
+            }
+          }
+        }
       }
     }
   }),
@@ -252,6 +266,27 @@ export const clearSubscriptionCache = () => {
   apolloClient.cache.evict({ fieldName: 'getCardUsageHistory' });
   apolloClient.cache.evict({ fieldName: 'getSubscriptionPlans' });
   apolloClient.cache.gc();
+};
+
+// 🚀 Nouvelle fonction pour gérer spécifiquement l'historique
+export const clearUsageHistoryCache = () => {
+  console.log('🧹 Nettoyage cache historique usage');
+  apolloClient.cache.evict({ fieldName: 'getCardUsageHistory' });
+  apolloClient.cache.gc();
+};
+
+// 🚀 Fonction pour forcer refresh de l'historique (en cas de problème)
+export const forceRefreshUsageHistory = async () => {
+  try {
+    console.log('🔄 Refresh forcé historique usage');
+    clearUsageHistoryCache();
+    await apolloClient.query({
+      query: GET_CARD_USAGE_HISTORY,
+      fetchPolicy: 'network-only'
+    });
+  } catch (error) {
+    console.error('❌ Erreur refresh historique:', error);
+  }
 };
 
 export const clearUserCache = () => {
