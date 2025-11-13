@@ -7,7 +7,8 @@ import websocketService from '../../services/websocketService.js';
 import { 
   validateTOTP, 
   calculateUserDiscount,
-  calculateAmounts
+  calculateAmounts,
+  generateTOTP
 } from '../../services/totpService.js';
 
 // Valider une carte digitale scannée (VENDOR uniquement)
@@ -42,8 +43,7 @@ export const validateDigitalCardHandler = async (event) => {
     
     // Vérifier que le token n'a pas déjà été utilisé récemment
     const recentUsage = digitalCard.tokenHistory.find(t => 
-      t.token === scannedToken && t.isUsed && 
-      (Date.now() - t.usedAt) < 60000 // Moins d'une minute
+      t.token === scannedToken && t.isUsed
     );
     
     if (recentUsage) {
@@ -106,6 +106,29 @@ export const validateDigitalCardHandler = async (event) => {
       digitalCard.tokenHistory[tokenHistoryIndex].isUsed = true;
       digitalCard.tokenHistory[tokenHistoryIndex].usedAt = new Date();
     }
+
+    // Générer un nouveau token après chaque validation pour éviter la réutilisation
+    const newToken = generateTOTP(digitalCard.secret);
+    const now = new Date();
+    digitalCard.previousToken = digitalCard.currentToken;
+    digitalCard.currentToken = newToken;
+    digitalCard.lastRotation = now;
+    digitalCard.qrCodeData = JSON.stringify({
+      userId: digitalCard.user._id.toString(),
+      token: newToken,
+      cardNumber: digitalCard.cardNumber,
+      timestamp: now.getTime(),
+      userPlan: subscriptionFeatures.plan
+    });
+    digitalCard.tokenHistory.push({
+      token: newToken,
+      createdAt: now,
+      isUsed: false
+    });
+    if (digitalCard.tokenHistory.length > 10) {
+      digitalCard.tokenHistory = digitalCard.tokenHistory.slice(-10);
+    }
+
     await digitalCard.save();
     
     // Créer un coupon pour l'historique client
