@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { Alert } from 'react-native';
 import { 
@@ -17,6 +17,13 @@ import {
 } from '@/graphql/mutations/digitalCard';
 import { wsClient } from '@/services/WebSocketClient';
 import { formatAmount } from '@/utils/cardUtils';
+
+// 🛡️ Protection globale contre les hooks multiples
+const globalCouponProcessing = {
+  current: false,
+  lastToken: null as string | null,
+  processingHookId: null as string | null
+};
 
 interface UseDigitalCardReturn {
   // Données
@@ -49,6 +56,12 @@ interface UseDigitalCardReturn {
  * Intègre le backend GraphQL avec gestion intelligente des états
  */
 export const useDigitalCard = (): UseDigitalCardReturn => {
+  // 🔑 ID unique pour cette instance du hook (anti-multiple instances)
+  const hookId = useRef(`hook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  
+  // 🚫 Protection anti-spam WebSocket
+  const lastCouponProcessed = useRef<string | null>(null);
+  const processingCoupon = useRef<boolean>(false);
   // 🔍 Query pour statut abonnement (toujours chargé)
   const { 
     data: subscriptionData, 
@@ -160,26 +173,54 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
   const addNewCouponToHistory = useCallback((newCoupon: any) => {
     if (!updateQuery) return;
     
-    console.log('🚀 Ajout coupon a l\'historique en temps reel');
+    console.log('🚀 Ajout coupon a l\'historique en temps reel', { token: newCoupon.code });
     
     updateQuery((prev) => {
       if (!prev?.getCardUsageHistory) return prev;
       
-      // Créer l'objet coupon pour l'historique
+      // 🎯 Créer l'objet coupon EXACTEMENT comme le backend
+      const couponId = newCoupon.id || `generated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const tokenToCheck = newCoupon.code || `token_${Date.now()}`;
+      
       const historyItem = {
-        token: newCoupon.code || `token_${Date.now()}`,
         usedAt: new Date().toISOString(),
+        token: tokenToCheck,
+        plan: newCoupon.plan || 'premium',
+        validationDate: new Date().toLocaleDateString('fr-FR', {
+          year: 'numeric',
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        discountApplied: newCoupon.amounts?.savings || 0,
+        partner: newCoupon.partner ? {
+          id: newCoupon.partner.id,
+          name: newCoupon.partner.name,
+          category: newCoupon.partner.category,
+          address: newCoupon.partner.address,
+          logo: newCoupon.partner.logo || null,
+          isActive: newCoupon.partner.isActive ?? true
+        } : null,
+        validator: newCoupon.validator || null,
         amounts: {
           original: newCoupon.amounts?.original || 0,
+          discount: newCoupon.amounts?.savings || 0, // 🎯 BACKEND utilise 'discount'
           final: newCoupon.amounts?.final || 0,
           savings: newCoupon.amounts?.savings || 0
-        },
-        partner: newCoupon.partner || null,
-        validator: newCoupon.validator || null,
-        plan: newCoupon.plan || 'basic'
+        }
       };
       
       const currentUsage = prev.getCardUsageHistory.usage;
+      
+      // 🚀 Vérifier si ce coupon n'existe pas déjà (anti-doublons)
+      const existingTokens = new Set((currentUsage.recentUsage || []).map(item => item.token));
+      if (existingTokens.has(tokenToCheck)) {
+        console.log('⚠️ Coupon déjà présent dans le cache, pas de duplication', { token: tokenToCheck });
+        return prev;
+      }
+      
+      console.log('✅ Ajout coupon au cache', { token: tokenToCheck, totalBefore: (currentUsage.recentUsage || []).length });
       
       return {
         ...prev,
@@ -222,6 +263,46 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
       const coupon = message?.coupon;
       if (!coupon) return;
 
+      const couponToken = coupon.code || coupon.id || coupon.token || `token_${Date.now()}`;
+      
+      console.log('🔎 Debug coupon WebSocket:', { 
+        hookId: hookId.current,
+        coupon_code: coupon.code, 
+        coupon_id: coupon.id, 
+        coupon_token: coupon.token,
+        generated_token: couponToken,
+        full_coupon: coupon 
+      });
+      
+      // 🚫 Protection anti-spam: éviter traitement multiple du même coupon
+      if (globalCouponProcessing.current || globalCouponProcessing.lastToken === couponToken) {
+        console.log('🚫 Coupon déjà en traitement GLOBALEMENT, ignoré', { 
+          token: couponToken, 
+          hookId: hookId.current,
+          processingHookId: globalCouponProcessing.processingHookId 
+        });
+        return;
+      }
+      
+      // Vérifier aussi la protection locale
+      if (processingCoupon.current || lastCouponProcessed.current === couponToken) {
+        console.log('🚫 Coupon déjà en traitement LOCALEMENT, ignoré', { 
+          token: couponToken, 
+          hookId: hookId.current 
+        });
+        return;
+      }
+      
+      // Activer protections
+      globalCouponProcessing.current = true;
+      globalCouponProcessing.lastToken = couponToken;
+      globalCouponProcessing.processingHookId = hookId.current;
+      
+      processingCoupon.current = true;
+      lastCouponProcessed.current = couponToken;
+      
+      console.log('📱 Traitement coupon WebSocket', { hookId: hookId.current, token: couponToken });
+
       // 🚀 Optimisation: mise a jour cache au lieu de refetch complet
       addNewCouponToHistory(coupon);
       
@@ -230,32 +311,63 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
         console.error('❌ Erreur refresh carte apres coupon:', err);
       });
 
-      try {
-        const original = typeof coupon.amounts?.original === 'number'
-          ? coupon.amounts.original
-          : null;
-        const final = typeof coupon.amounts?.final === 'number'
-          ? coupon.amounts.final
-          : null;
-        const savings = typeof coupon.amounts?.savings === 'number'
-          ? coupon.amounts.savings
-          : null;
-        const partnerName = coupon.partner?.name || 'notre partenaire';
+      // 🎯 Afficher l'alerte UNE SEULE FOIS avec protection
+      setTimeout(() => {
+        try {
+          const original = typeof coupon.amounts?.original === 'number'
+            ? coupon.amounts.original
+            : null;
+          const final = typeof coupon.amounts?.final === 'number'
+            ? coupon.amounts.final
+            : null;
+          const savings = typeof coupon.amounts?.savings === 'number'
+            ? coupon.amounts.savings
+            : null;
+          const partnerName = coupon.partner?.name || 'notre partenaire';
 
-        const originalLabel = original !== null ? formatAmount(original) : '—';
-        const finalLabel = final !== null ? formatAmount(final) : '—';
-        const savingsLabel = savings !== null ? formatAmount(savings) : null;
+          const originalLabel = original !== null ? formatAmount(original) : '—';
+          const finalLabel = final !== null ? formatAmount(final) : '—';
+          const savingsLabel = savings !== null ? formatAmount(savings) : null;
 
-        const messageLines = [
-          `Vous payez ${finalLabel} au lieu de ${originalLabel}.`,
-          savingsLabel ? `Economie realisee : ${savingsLabel}.` : null,
-          `Offre appliquee par ${partnerName}.`
-        ].filter(Boolean);
+          const messageLines = [
+            `Vous payez ${finalLabel} au lieu de ${originalLabel}.`,
+            savingsLabel ? `Economie realisee : ${savingsLabel}.` : null,
+            `Offre appliquee par ${partnerName}.`
+          ].filter(Boolean);
 
-        Alert.alert('Reduction appliquee \u2705', messageLines.join('\n'));
-      } catch (alertError) {
-        console.error('❌ Erreur affichage alerte coupon:', alertError);
-      }
+          Alert.alert(
+            'Reduction appliquee \u2705', 
+            messageLines.join('\n'),
+            [
+              { 
+                text: 'OK', 
+                style: 'default',
+                onPress: () => {
+                  console.log('📱 Alerte fermée par utilisateur');
+                  // Reset protection après fermeture
+                  setTimeout(() => {
+                    // Reset protections globales
+                    globalCouponProcessing.current = false;
+                    globalCouponProcessing.lastToken = null;
+                    globalCouponProcessing.processingHookId = null;
+                    
+                    // Reset protections locales
+                    processingCoupon.current = false;
+                    lastCouponProcessed.current = null;
+                  }, 1000);
+                }
+              }
+            ],
+            { 
+              cancelable: false // Empêcher fermeture accidentelle
+            }
+          );
+        } catch (alertError) {
+          console.error('❌ Erreur affichage alerte coupon:', alertError);
+          // Reset protection en cas d'erreur
+          processingCoupon.current = false;
+        }
+      }, 100); // Délai pour éviter conflits
     });
 
     return unsubscribe;
