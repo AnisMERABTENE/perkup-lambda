@@ -466,43 +466,67 @@ export default function MapsScreen() {
 
                 {/* Section principale - nom, catégorie et réductions */}
                 <View style={styles.discountSection}>
-                  {/* Nom du magasin */}
-                  <Text style={styles.storeName}>{selectedPartner.name}</Text>
+                  {/* Nom du magasin avec émoji */}
+                  <View style={styles.storeNameContainer}>
+                    <Text style={styles.storeEmoji}>🏪</Text>
+                    <Text style={styles.storeName}>{selectedPartner.name}</Text>
+                  </View>
                   
-                  {/* Catégorie */}
-                  <Text style={styles.storeCategory}>{formatCategoryLabel(selectedPartner.category)}</Text>
+                  {/* Catégorie avec badge */}
+                  <View style={styles.categoryBadge}>
+                    <Text style={styles.storeCategory}>{formatCategoryLabel(selectedPartner.category)}</Text>
+                  </View>
                   
-                  <Text style={styles.mainDiscountText}>
-                    Le magasin offre <Text style={styles.discountHighlight}>{selectedPartner.offeredDiscount}%</Text> de réduction
-                  </Text>
+                  {/* Section discount avec icône */}
+                  <View style={styles.discountBanner}>
+                    <Text style={styles.discountEmoji}>🎯</Text>
+                    <Text style={styles.mainDiscountText}>
+                      <Text style={styles.discountHighlight}>{selectedPartner.offeredDiscount}%</Text> de réduction disponible
+                    </Text>
+                  </View>
+                  
+                  {/* Séparateur élégant */}
+                  <View style={styles.separator} />
                   
                   {userPlan && userPlan !== 'free' ? (
                     selectedPartner.userDiscount && selectedPartner.userDiscount > 0 ? (
                       <>
-                        <Text style={styles.userBenefitText}>
-                          Grâce à votre offre <Text style={styles.planHighlight}>{getPlanDisplayName(userPlan)}</Text>, vous disposez de{' '}
-                          <Text style={styles.benefitHighlight}>{selectedPartner.userDiscount}%</Text> de réduction chez ce partenaire.
-                        </Text>
-                        {selectedPartner.userDiscount < selectedPartner.offeredDiscount && (
-                          <Text style={styles.upgradeHint}>
-                            💎 Passez à l'offre Premium pour avoir jusqu'à {selectedPartner.offeredDiscount}% de réduction
+                        <View style={styles.benefitContainer}>
+                          <Text style={styles.benefitEmoji}>✨</Text>
+                          <Text style={styles.userBenefitText}>
+                            Avec votre plan <Text style={styles.planHighlight}>{getPlanDisplayName(userPlan)}</Text>
+                            {"\n"}vous bénéficiez de <Text style={styles.benefitHighlight}>{selectedPartner.userDiscount}%</Text> de remise !
                           </Text>
+                        </View>
+                        {selectedPartner.userDiscount < selectedPartner.offeredDiscount && (
+                          <View style={styles.upgradeContainer}>
+                            <Text style={styles.upgradeEmoji}>🚀</Text>
+                            <Text style={styles.upgradeHint}>
+                              Passez Premium pour débloquer {selectedPartner.offeredDiscount}% !
+                            </Text>
+                          </View>
                         )}
                       </>
                     ) : (
-                      <Text style={styles.userBenefitText}>
-                        Grâce à votre formule <Text style={styles.planHighlight}>{getPlanDisplayName(userPlan)}</Text>, vous avez{' '}
-                        <Text style={styles.benefitHighlight}>{selectedPartner.offeredDiscount}%</Text> de réduction chez {selectedPartner.name}.
-                      </Text>
+                      <View style={styles.benefitContainer}>
+                        <Text style={styles.benefitEmoji}>🎉</Text>
+                        <Text style={styles.userBenefitText}>
+                          Votre plan <Text style={styles.planHighlight}>{getPlanDisplayName(userPlan)}</Text> vous donne{' '}
+                          <Text style={styles.benefitHighlight}>{selectedPartner.offeredDiscount}%</Text> chez {selectedPartner.name} !
+                        </Text>
+                      </View>
                     )
                   ) : (
-                    <Text style={styles.freeUserHint}>
-                      🔓 Souscrivez à un plan pour bénéficier de réductions chez nos partenaires !
-                    </Text>
+                    <View style={styles.freeUserContainer}>
+                      <Text style={styles.lockEmoji}>🔒</Text>
+                      <Text style={styles.freeUserHint}>
+                        Abonnez-vous pour débloquer toutes les réductions !
+                      </Text>
+                    </View>
                   )}
                 </View>
 
-                {/* Bouton d'action */}
+                {/* Bouton d'action modern */}
                 <TouchableOpacity 
                   style={styles.actionButton}
                   onPress={() => {
@@ -510,7 +534,8 @@ export default function MapsScreen() {
                     router.push(`/partner/${selectedPartner.id}`);
                   }}
                 >
-                  <Text style={styles.actionButtonText}>Voir le partenaire</Text>
+                  <Text style={styles.actionEmoji}>👀</Text>
+                  <Text style={styles.actionButtonText}>Découvrir ce partenaire</Text>
                   <Ionicons name="arrow-forward" size={18} color={AppColors.white} />
                 </TouchableOpacity>
               </>
@@ -653,125 +678,237 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  // Styles pour la modal - VERSION AMÉLIORÉE
+  // Styles pour la modal - VERSION ULTRA MODERNE 🚀
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
   },
   modalContent: {
-    backgroundColor: AppColors.white,
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
     width: '100%',
-    maxWidth: 350,
+    maxWidth: 380,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 15,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  storeName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: AppColors.text,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: AppColors.background,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  // Conteneur du nom avec émoji
+  storeNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  storeEmoji: {
+    fontSize: 24,
+  },
+  storeName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 28,
+    letterSpacing: -0.5,
+  },
+  // Badge catégorie
+  categoryBadge: {
+    backgroundColor: '#E8F4FD',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    alignSelf: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: AppColors.primary + '20',
   },
   storeCategory: {
-    fontSize: 14,
+    fontSize: 12,
     color: AppColors.primary,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
     textAlign: 'center',
   },
-  discountSection: {
-    backgroundColor: AppColors.background,
-    borderRadius: 12,
+  // Section discount principal
+  discountBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF8E7',
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFE066',
+    gap: 8,
+  },
+  discountEmoji: {
+    fontSize: 20,
   },
   mainDiscountText: {
     fontSize: 16,
-    color: AppColors.text,
+    color: '#2D2D2D',
+    fontWeight: '600',
     textAlign: 'center',
-    fontWeight: '500',
     lineHeight: 22,
   },
   discountHighlight: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: AppColors.primary,
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FF6B35',
+    textShadowColor: 'rgba(255, 107, 53, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  // Séparateur élégant
+  separator: {
+    height: 2,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 1,
+    marginVertical: 8,
+    alignSelf: 'center',
+    width: '60%',
+  },
+  // Conteneurs des bénéfices
+  benefitContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    gap: 12,
+  },
+  benefitEmoji: {
+    fontSize: 20,
+    marginTop: 2,
   },
   userBenefitText: {
     fontSize: 15,
-    color: AppColors.success,
-    fontWeight: '500',
-    textAlign: 'center',
-    lineHeight: 21,
+    color: '#166534',
+    fontWeight: '600',
+    lineHeight: 22,
+    flex: 1,
   },
   planHighlight: {
-    fontWeight: '700',
+    fontWeight: '800',
     color: AppColors.primary,
+    fontSize: 16,
   },
   benefitHighlight: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#059669',
+    textShadowColor: 'rgba(5, 150, 105, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  // Conteneur upgrade
+  upgradeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    gap: 8,
+  },
+  upgradeEmoji: {
     fontSize: 16,
-    fontWeight: '800',
-    color: AppColors.success,
   },
   upgradeHint: {
-    fontSize: 13,
-    color: AppColors.warning,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 4,
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 20,
+  },
+  // Conteneur utilisateur gratuit
+  freeUserContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  lockEmoji: {
+    fontSize: 20,
   },
   freeUserHint: {
     fontSize: 15,
-    color: AppColors.textSecondary,
-    fontWeight: '500',
+    color: '#475569',
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 22,
+    flex: 1,
   },
+  discountSection: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    padding: 0,
+    marginBottom: 24,
+    gap: 0,
+  },
+  // Bouton d'action moderne
   actionButton: {
     backgroundColor: AppColors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
     shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 16,
+    elevation: 8,
+    transform: [{ scale: 1 }],
+  },
+  actionEmoji: {
+    fontSize: 18,
   },
   actionButtonText: {
     color: AppColors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });
