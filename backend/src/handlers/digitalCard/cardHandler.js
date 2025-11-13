@@ -3,12 +3,13 @@ import DigitalCard from '../../models/DigitalCard.js';
 import Coupon from '../../models/Coupon.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
-import { 
-  generateTOTP, 
-  generateCardNumber, 
-  generateTOTPSecret, 
-  TOTP_WINDOW 
+import {
+  generateTOTP,
+  generateCardNumber,
+  generateTOTPSecret,
+  TOTP_WINDOW
 } from '../../services/totpService.js';
+import { encryptSecret, getDigitalCardSecret } from '../../utils/secretManager.js';
 
 // Créer ou récupérer la carte digitale de l'utilisateur (CLIENT uniquement)
 export const getMyDigitalCardHandler = async (event) => {
@@ -35,7 +36,7 @@ export const getMyDigitalCardHandler = async (event) => {
         previousToken: null,
         cardNumber,
         lastRotation: new Date(),
-        secret: userSecret,
+        secret: encryptSecret(userSecret),
         qrCodeData: JSON.stringify({
           userId,
           token: currentToken,
@@ -53,13 +54,15 @@ export const getMyDigitalCardHandler = async (event) => {
       
       console.log(`Carte digitale créée pour utilisateur ${userId} - Numéro: ${cardNumber}`);
     } else {
+      const decryptedSecret = await getDigitalCardSecret(digitalCard);
+
       // Vérifier si le token doit être mis à jour
       const now = new Date();
       const timeSinceRotation = (now - digitalCard.lastRotation) / 1000;
       
       if (timeSinceRotation >= TOTP_WINDOW) {
         // Générer un nouveau token avec le secret existant
-        const newToken = generateTOTP(digitalCard.secret);
+        const newToken = generateTOTP(decryptedSecret);
         
         // Sauvegarder l'ancien token et générer le nouveau
         digitalCard.previousToken = digitalCard.currentToken;

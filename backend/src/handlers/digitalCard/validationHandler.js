@@ -4,12 +4,13 @@ import Partner from '../../models/Partner.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
 import websocketService from '../../services/websocketService.js';
-import { 
-  validateTOTP, 
+import {
+  validateTOTP,
   calculateUserDiscount,
   calculateAmounts,
   generateTOTP
 } from '../../services/totpService.js';
+import { getDigitalCardSecret } from '../../utils/secretManager.js';
 
 // Valider une carte digitale scannée (VENDOR uniquement)
 export const validateDigitalCardHandler = async (event) => {
@@ -51,7 +52,7 @@ export const validateDigitalCardHandler = async (event) => {
     }
     
     // Valider le token avec TOTP
-    const secret = digitalCard.secret;
+    const secret = await getDigitalCardSecret(digitalCard);
     if (!secret) {
       throw new Error('Secret TOTP manquant');
     }
@@ -108,7 +109,7 @@ export const validateDigitalCardHandler = async (event) => {
     }
 
     // Générer un nouveau token après chaque validation pour éviter la réutilisation
-    const newToken = generateTOTP(digitalCard.secret);
+    const newToken = generateTOTP(secret);
     const now = new Date();
     digitalCard.previousToken = digitalCard.currentToken;
     digitalCard.currentToken = newToken;

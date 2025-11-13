@@ -241,10 +241,19 @@ class WebSocketClient {
       }
       
       // URL WebSocket depuis la configuration
-      const wsUrl = `${API_CONFIG.WEBSOCKET_URL}?token=${token}`;
+      const wsUrl = API_CONFIG.WEBSOCKET_URL;
+      const wsHeaders = {
+        Authorization: `Bearer ${token}`
+      };
       
       console.log('🔌 Connexion WebSocket...');
-      this.ws = new WebSocket(wsUrl);
+      try {
+        // React Native supporte les headers custom dans le 3e paramètre
+        this.ws = new (WebSocket as any)(wsUrl, undefined, { headers: wsHeaders });
+      } catch (error) {
+        console.warn('⚠️ Impossible d\'injecter les headers WebSocket, fallback legacy', error);
+        this.ws = new WebSocket(`${wsUrl}?token=${token}`);
+      }
       
       this.ws.onopen = this.onOpen.bind(this);
       this.ws.onmessage = this.onMessage.bind(this);

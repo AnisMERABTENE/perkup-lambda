@@ -23,6 +23,7 @@ provider:
   environment:
     MONGO_URI: ${env:MONGO_URI}
     JWT_SECRET: ${env:JWT_SECRET}
+    CARD_SECRET_KEY: ${env:CARD_SECRET_KEY}
     EMAIL_SOURCE: ${env:EMAIL_SOURCE}
     SES_REGION: ${env:SES_REGION}
     

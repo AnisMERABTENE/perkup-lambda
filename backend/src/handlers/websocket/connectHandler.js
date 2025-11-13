@@ -16,6 +16,24 @@ const verifyToken = (token) => {
   }
 };
 
+const extractAuthToken = (event) => {
+  const headerToken =
+    event.headers?.Authorization ||
+    event.headers?.authorization ||
+    event.headers?.['Sec-WebSocket-Protocol'];
+  
+  if (headerToken) {
+    return headerToken;
+  }
+  
+  const queryToken = event.queryStringParameters?.token;
+  if (queryToken) {
+    return queryToken.startsWith('Bearer ') ? queryToken : `Bearer ${queryToken}`;
+  }
+  
+  return null;
+};
+
 /**
  * 🔌 WEBSOCKET CONNECTION HANDLER
  */
@@ -27,11 +45,11 @@ export const handler = async (event) => {
   const { connectionId, domainName, stage } = requestContext;
   
   try {
-    // Récupérer le token depuis les query parameters
-    const token = event.queryStringParameters?.token;
+    // Récupérer le token depuis les headers (fallback: query string pour compatibilité)
+    const token = extractAuthToken(event);
     
     if (!token) {
-      console.log('❌ Pas de token fourni');
+      console.log('❌ Pas de token fourni (Authorization header ou paramètre token)');
       return {
         statusCode: 401,
         body: JSON.stringify({ message: 'Token manquant' })

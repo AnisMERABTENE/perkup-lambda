@@ -4,6 +4,7 @@
  */
 
 import secureLogger from '../utils/secureLogger.js';
+import cacheService from '../services/cache/cacheService.js';
 
 // Configuration de sécurité
 const SECURITY_CONFIG = {
@@ -36,9 +37,6 @@ const SECURITY_CONFIG = {
     /setInterval/gi,       // Code injection
   ]
 };
-
-// Cache pour le rate limiting
-const requestCache = new Map();
 
 /**
  * Analyse la profondeur d'une requête GraphQL
@@ -150,32 +148,28 @@ function validateVariables(variables) {
 /**
  * Rate limiting par IP/utilisateur
  */
-function checkRateLimit(identifier) {
-  const now = Date.now();
-  const windowStart = now - 60000; // 1 minute
-  
-  if (!requestCache.has(identifier)) {
-    requestCache.set(identifier, []);
+async function checkRateLimit(identifier) {
+  const windowSeconds = 60;
+  try {
+    const key = `sec:${identifier}`;
+    const result = await cacheService.checkRateLimit(
+      key,
+      SECURITY_CONFIG.maxRequestsPerMinute,
+      windowSeconds
+    );
+    
+    if (!result.allowed) {
+      return {
+        allowed: false,
+        retryAfter: windowSeconds
+      };
+    }
+    
+    return { allowed: true };
+  } catch (error) {
+    secureLogger.warn('⚠️ Rate limit indisponible, fallback permissif', error.message);
+    return { allowed: true };
   }
-  
-  const requests = requestCache.get(identifier);
-  
-  // Nettoyer les anciennes requêtes
-  const recentRequests = requests.filter(timestamp => timestamp > windowStart);
-  
-  // Vérifier la limite
-  if (recentRequests.length >= SECURITY_CONFIG.maxRequestsPerMinute) {
-    return {
-      allowed: false,
-      retryAfter: Math.ceil((recentRequests[0] + 60000 - now) / 1000)
-    };
-  }
-  
-  // Ajouter la nouvelle requête
-  recentRequests.push(now);
-  requestCache.set(identifier, recentRequests);
-  
-  return { allowed: true };
 }
 
 /**
@@ -185,7 +179,7 @@ export function createSecurityMiddleware() {
   return {
     requestDidStart() {
       return {
-        didResolveOperation(requestContext) {
+        async didResolveOperation(requestContext) {
           const { request, context } = requestContext;
           const query = request.query;
           const variables = request.variables;
@@ -232,7 +226,7 @@ export function createSecurityMiddleware() {
                              context?.headers?.['x-real-ip'] || 
                              'anonymous';
             
-            const rateLimitResult = checkRateLimit(identifier);
+            const rateLimitResult = await checkRateLimit(identifier);
             if (!rateLimitResult.allowed) {
               throw new Error(`Rate limit atteint. Réessayez dans ${rateLimitResult.retryAfter} secondes`);
             }
@@ -276,22 +270,5 @@ export function createSecurityMiddleware() {
     }
   };
 }
-
-/**
- * Nettoyage périodique du cache de rate limiting
- */
-setInterval(() => {
-  const now = Date.now();
-  const cutoff = now - 300000; // 5 minutes
-  
-  for (const [key, requests] of requestCache.entries()) {
-    const recentRequests = requests.filter(timestamp => timestamp > cutoff);
-    if (recentRequests.length === 0) {
-      requestCache.delete(key);
-    } else {
-      requestCache.set(key, recentRequests);
-    }
-  }
-}, 60000); // Nettoyer toutes les minutes
 
 export default createSecurityMiddleware;
