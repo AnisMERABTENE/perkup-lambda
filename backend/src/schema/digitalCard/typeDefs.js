@@ -62,6 +62,31 @@ const digitalCardTypeDefs = `
     security: SecurityInfo!
   }
   
+  input CardValidationHistoryInput {
+    limit: Int
+    page: Int
+    category: String
+  }
+
+  type CardValidationRecord {
+    id: ID!
+    usedAt: String
+    token: String
+    partner: UsagePartner
+    amounts: UsageAmount!
+    plan: String!
+  }
+
+  type CardValidationHistory {
+    items: [CardValidationRecord!]!
+    total: Int!
+    limit: Int!
+    page: Int!
+    hasMore: Boolean!
+    totalSavings: Float!
+    categories: [String!]!
+  }
+  
   type BasicCardInfo {
     cardNumber: String!
     createdAt: String!
@@ -117,6 +142,7 @@ const digitalCardTypeDefs = `
   extend type Query {
     getMyDigitalCard: DigitalCardResponse!
     getCardUsageHistory: CardUsageResponse!
+    getCardValidationHistory(input: CardValidationHistoryInput!): CardValidationHistory!
   }
 
   extend type Mutation {

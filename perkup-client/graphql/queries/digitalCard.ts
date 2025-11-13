@@ -81,6 +81,37 @@ export const GET_CARD_USAGE_HISTORY = gql`
   }
 `;
 
+export const GET_CARD_VALIDATION_HISTORY = gql`
+  query GetCardValidationHistory($input: CardValidationHistoryInput!) {
+    getCardValidationHistory(input: $input) {
+      items {
+        id
+        usedAt
+        token
+        plan
+        partner {
+          id
+          name
+          category
+          address
+        }
+        amounts {
+          original
+          discount
+          final
+          savings
+        }
+      }
+      total
+      limit
+      page
+      hasMore
+      totalSavings
+      categories
+    }
+  }
+`;
+
 // 📊 Types TypeScript pour les réponses
 export interface DigitalCardData {
   cardNumber: string;
@@ -157,5 +188,36 @@ export interface CardUsageResponse {
       currentlyValid: string;
       lastValidation?: string | null;
     };
+  };
+}
+
+export interface CardValidationRecord {
+  id: string | null;
+  usedAt: string | null;
+  token: string | null;
+  plan: string;
+  partner: {
+    id: string | null;
+    name: string | null;
+    category: string | null;
+    address: string | null;
+  } | null;
+  amounts: {
+    original: number;
+    discount: number;
+    final: number;
+    savings: number;
+  };
+}
+
+export interface CardValidationHistoryResponse {
+  getCardValidationHistory: {
+    items: CardValidationRecord[];
+    total: number;
+    limit: number;
+    page: number;
+    hasMore: boolean;
+    totalSavings: number;
+    categories: string[];
   };
 }

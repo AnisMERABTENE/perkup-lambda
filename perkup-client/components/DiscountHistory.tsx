@@ -12,6 +12,7 @@ import AppColors from '@/constants/Colors';
 import useDigitalCard from '@/hooks/useDigitalCard';
 import { formatDate, formatAmount } from '@/utils/cardUtils';
 import { useTranslation } from '@/providers/I18nProvider';
+import { router } from 'expo-router';
 
 interface DiscountHistoryProps {
   maxItems?: number;
@@ -118,7 +119,10 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
       />
 
       {recentUsage.length >= maxItems && (
-        <TouchableOpacity style={styles.viewMoreButton}>
+        <TouchableOpacity
+          style={styles.viewMoreButton}
+          onPress={() => router.push('/discounts')}
+        >
           <Text style={styles.viewMoreText}>{t('card_history_view_more')}</Text>
           <Ionicons name="chevron-forward" size={16} color={AppColors.primary} />
         </TouchableOpacity>
@@ -178,7 +182,6 @@ const styles = StyleSheet.create({
 
   listContainer: {
     paddingBottom: 8,
-    gap: 12,
   },
 
   usageItem: {
@@ -209,7 +212,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
-    gap: 8,
   },
 
   usageTitle: {
@@ -220,7 +222,6 @@ const styles = StyleSheet.create({
 
   dateBadges: {
     alignItems: 'flex-end',
-    gap: 4,
   },
   usageDate: {
     fontSize: 12,

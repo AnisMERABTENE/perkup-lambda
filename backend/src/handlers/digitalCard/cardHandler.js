@@ -1,6 +1,6 @@
+import mongoose from 'mongoose';
 import DigitalCard from '../../models/DigitalCard.js';
 import Coupon from '../../models/Coupon.js';
-import Partner from '../../models/Partner.js';
 import { UserCache } from '../../services/cache/strategies/userCache.js';
 import { SubscriptionCache } from '../../services/cache/strategies/subscriptionCache.js';
 import { 
@@ -232,6 +232,137 @@ export const getCardUsageHistoryHandler = async (event) => {
     };
   } catch (error) {
     console.error('Erreur historique carte:', error);
+    throw error;
+  }
+};
+
+export const getCardValidationHistoryHandler = async (event) => {
+  const userId = event.context.user.id;
+  const input = event.arguments?.input || {};
+
+  const limit = Math.min(Math.max(input.limit ?? 20, 5), 50);
+  const page = Math.max(input.page ?? 1, 1);
+  const categoryFilter = input.category || null;
+  const skip = (page - 1) * limit;
+
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const baseMatch = {
+    user: userObjectId,
+    digitalCardValidation: true
+  };
+
+  const lookupPartner = {
+    $lookup: {
+      from: 'partners',
+      localField: 'partner',
+      foreignField: '_id',
+      as: 'partner'
+    }
+  };
+
+  const unwindPartner = {
+    $unwind: {
+      path: '$partner',
+      preserveNullAndEmptyArrays: true
+    }
+  };
+
+  const matchPipeline = [
+    { $match: baseMatch },
+    lookupPartner,
+    unwindPartner
+  ];
+
+  const matchWithCategory = categoryFilter
+    ? [...matchPipeline, { $match: { 'partner.category': categoryFilter } }]
+    : matchPipeline;
+
+  const historyPipeline = [
+    ...matchWithCategory,
+    { $sort: { usedAt: -1, createdAt: -1 } },
+    { $skip: skip },
+    { $limit: limit }
+  ];
+
+  const countPipeline = [
+    ...matchWithCategory,
+    { $count: 'total' }
+  ];
+
+  const savingsPipeline = [
+    ...matchWithCategory,
+    {
+      $project: {
+        discountAmount: { $ifNull: ['$discountAmount', 0] }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$discountAmount' }
+      }
+    }
+  ];
+
+  const categoriesPipeline = [
+    { $match: baseMatch },
+    lookupPartner,
+    unwindPartner,
+    { $match: { 'partner.category': { $ne: null } } },
+    { $group: { _id: '$partner.category' } },
+    { $sort: { _id: 1 } }
+  ];
+
+  try {
+    const [historyResult, countResult, savingsResult, categoriesResult] = await Promise.all([
+      Coupon.aggregate(historyPipeline),
+      Coupon.aggregate(countPipeline),
+      Coupon.aggregate(savingsPipeline),
+      Coupon.aggregate(categoriesPipeline)
+    ]);
+
+    const total = countResult?.[0]?.total || 0;
+    const totalSavings = savingsResult?.[0]?.total || 0;
+    const categories = categoriesResult
+      .map((entry) => entry?._id)
+      .filter((value) => typeof value === 'string');
+
+    const items = historyResult.map((coupon) => {
+      const partnerDoc = coupon.partner;
+
+      return {
+        id: coupon._id?.toString?.() || null,
+        usedAt: coupon.usedAt?.toISOString?.() || coupon.updatedAt?.toISOString?.() || null,
+        token: coupon.qrCode || '********',
+        partner: partnerDoc
+          ? {
+              id: partnerDoc._id?.toString?.() || null,
+              name: partnerDoc.name,
+              category: partnerDoc.category,
+              address: partnerDoc.address
+            }
+          : null,
+        amounts: {
+          original: coupon.originalAmount || 0,
+          discount: coupon.discountAmount || 0,
+          final: coupon.finalAmount || 0,
+          savings: coupon.discountAmount || 0
+        },
+        plan: coupon.metadata?.userPlan || 'inconnu'
+      };
+    });
+
+    return {
+      items,
+      total,
+      limit,
+      page,
+      hasMore: page * limit < total,
+      totalSavings,
+      categories
+    };
+  } catch (error) {
+    console.error('Erreur historique complet de la carte:', error);
     throw error;
   }
 };

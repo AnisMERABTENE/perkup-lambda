@@ -1,4 +1,4 @@
-import { getMyDigitalCardHandler, toggleDigitalCardHandler, getCardUsageHistoryHandler, resetDigitalCardHandler } from '../../handlers/digitalCard/cardHandler.js';
+import { getMyDigitalCardHandler, toggleDigitalCardHandler, getCardUsageHistoryHandler, getCardValidationHistoryHandler, resetDigitalCardHandler } from '../../handlers/digitalCard/cardHandler.js';
 import { validateDigitalCardHandler } from '../../handlers/digitalCard/validationHandler.js';
 import { withAuth } from '../../middlewares/checkSubscription.js';
 
@@ -22,6 +22,16 @@ const digitalCardResolvers = {
       }
       
       return await getCardUsageHistoryHandler(event);
+    })
+    ,
+    getCardValidationHistory: withAuth(async (_, args, context) => {
+      const event = { context, arguments: args };
+
+      if (context.user.role !== 'client') {
+        throw new Error('Accès réservé aux clients');
+      }
+
+      return await getCardValidationHistoryHandler(event);
     })
   },
 

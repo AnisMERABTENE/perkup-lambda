@@ -101,12 +101,20 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleSubscriptionNavigation}>
-              <Ionicons name="card-outline" size={24} color={AppColors.primary} />
-              <Text style={styles.menuText}>{t('profile_subscription')}</Text>
-              <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.menuItem} onPress={handleSubscriptionNavigation}>
+            <Ionicons name="card-outline" size={24} color={AppColors.primary} />
+            <Text style={styles.menuText}>{t('profile_subscription')}</Text>
+            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/discounts')}
+          >
+            <Ionicons name="receipt-outline" size={24} color={AppColors.primary} />
+            <Text style={styles.menuText}>{t('profile_discounts_history')}</Text>
+            <Ionicons name="chevron-forward" size={20} color={AppColors.textLight} />
+          </TouchableOpacity>
+        </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('profile_preferences')}</Text>
