@@ -49,6 +49,10 @@ interface UseDigitalCardReturn {
   refetchCard: () => Promise<any>;
   refetchSubscription: () => Promise<any>;
   refreshAll: () => Promise<void>;
+  
+  // 🚀 Nouvelle action pour régénérer QR + retourner carte
+  shouldFlipBackAfterValidation: boolean;
+  markCardAsFlippedBack: () => void;
 }
 
 /**
@@ -62,6 +66,10 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
   // 🚫 Protection anti-spam WebSocket
   const lastCouponProcessed = useRef<string | null>(null);
   const processingCoupon = useRef<boolean>(false);
+  
+  // 🚀 État pour gérer le retournement de carte après validation
+  const [shouldFlipBackAfterValidation, setShouldFlipBackAfterValidation] = useState(false);
+  const [qrIsExpiredByValidation, setQrIsExpiredByValidation] = useState(false);
   // 🔍 Query pour statut abonnement (toujours chargé)
   const { 
     data: subscriptionData, 
@@ -237,6 +245,11 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     });
   }, [updateQuery]);
 
+  const markCardAsFlippedBack = useCallback(() => {
+    setShouldFlipBackAfterValidation(false);
+    console.log('📴 Carte marquée comme retournée côté recto');
+  }, []);
+
   const refreshAll = useCallback(async () => {
     try {
       console.log('🔄 Refresh complet...');
@@ -344,6 +357,19 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
                 style: 'default',
                 onPress: () => {
                   console.log('📱 Alerte fermée par utilisateur');
+                  
+                  // 🚀 Régénérer le code QR immédiatement
+                  console.log('🔄 Régénération code QR après validation...');
+                  refetchCard({ fetchPolicy: 'network-only' }).then(() => {
+                    console.log('✅ Nouveau code QR généré');
+                  }).catch((err) => {
+                    console.error('❌ Erreur régénération QR:', err);
+                  });
+                  
+                  // 📴 Signaler que la carte doit retourner côté recto
+                  setShouldFlipBackAfterValidation(true);
+                  console.log('📴 Signal envoyé pour retourner carte côté recto');
+                  
                   // Reset protection après fermeture
                   setTimeout(() => {
                     // Reset protections globales
@@ -400,7 +426,11 @@ export const useDigitalCard = (): UseDigitalCardReturn => {
     resetCard,
     refetchCard,
     refetchSubscription,
-    refreshAll
+    refreshAll,
+    
+    // 🚀 Nouvelles actions pour gestion carte post-validation
+    shouldFlipBackAfterValidation,
+    markCardAsFlippedBack
   };
 };
 

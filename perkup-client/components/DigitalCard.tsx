@@ -47,6 +47,8 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     toggleCard,
     refreshAll,
     refetchCard,
+    shouldFlipBackAfterValidation,
+    markCardAsFlippedBack,
   } = useDigitalCard();
   const { t } = useTranslation();
 
@@ -123,7 +125,12 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
     if (isRefreshingRef.current) return null;
     isRefreshingRef.current = true;
     try {
-      const result = await refetchCard();
+      console.log('🔄 FORCE génération nouveau QR depuis backend (network-only)...');
+      const result = await refetchCard({ fetchPolicy: 'network-only' });
+      console.log('✅ Nouveau QR reçu du backend:', {
+        qrCode: result?.data?.getMyDigitalCard?.card?.qrCode,
+        timeUntilRotation: result?.data?.getMyDigitalCard?.card?.timeUntilRotation
+      });
       return result?.data?.getMyDigitalCard?.card?.timeUntilRotation ?? null;
     } catch (refreshError) {
       console.error('❌ Erreur refresh QR:', refreshError);
@@ -193,6 +200,26 @@ export default function DigitalCard({ onSubscriptionPress }: DigitalCardProps) {
       stopTimer();
     };
   }, [stopTimer]);
+
+  // 🚀 NOUVELLE LOGIQUE: Retourner automatiquement la carte côté recto après validation
+  useEffect(() => {
+    if (shouldFlipBackAfterValidation && showQR) {
+      console.log('📴 Détection signal retournement: carte en mode QR, retour automatique...');
+      
+      // Animation de retour côté recto
+      Animated.timing(flipAnimation, {
+        toValue: 0, // Retour à la face avant
+        duration: 600,
+        useNativeDriver: true,
+      }).start(() => {
+        // Une fois l'animation terminée
+        setShowQR(false);
+        stopTimer();
+        markCardAsFlippedBack(); // Signaler que c'est fait
+        console.log('✅ Carte retournée côté recto, nouveau QR prêt pour prochaine utilisation');
+      });
+    }
+  }, [shouldFlipBackAfterValidation, showQR, markCardAsFlippedBack, stopTimer]);
 
   // 🎯 Gestion du clic sur la carte
   const handleCardPress = async () => {
