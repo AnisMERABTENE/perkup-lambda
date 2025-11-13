@@ -289,13 +289,9 @@ export default function MapsScreen() {
           true;
         `;
         webViewRef.current?.postMessage(jsCode);
-      } else if (message.type === 'markerClick') {
-        Alert.alert(
-          message.data.name,
-          `${message.data.category}\n${message.data.address}\nRéduction: ${message.data.discount}%`,
-          [{ text: 'OK' }]
-        );
       }
+      // 🚫 SUPPRIMÉ: La modal Alert.alert() avec bouton "OK"
+      // Maintenant seul le popup Leaflet (avec badge vert) s'affichera
     } catch (error) {
       console.error('Erreur parsing message:', error);
     }
