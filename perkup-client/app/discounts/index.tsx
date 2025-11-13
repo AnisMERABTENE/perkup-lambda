@@ -11,10 +11,12 @@ import {
   StatusBar
 } from 'react-native';
 import { useLazyQuery } from '@apollo/client/react';
+import { Ionicons } from '@expo/vector-icons';
 import AppColors from '@/constants/Colors';
 import { formatDate, formatAmount } from '@/utils/cardUtils';
 import { useTranslation } from '@/providers/I18nProvider';
 import { GET_CARD_VALIDATION_HISTORY, CardValidationHistoryResponse, CardValidationRecord } from '@/graphql/queries/digitalCard';
+import { router } from 'expo-router';
 
 const PAGE_LIMIT = 20;
 
@@ -97,7 +99,15 @@ export default function DiscountsHistoryScreen() {
   const filters = useMemo(() => ['all', ...categories], [categories]);
 
   const renderHistoryItem = ({ item }: { item: CardValidationRecord }) => (
-    <View style={styles.usageItem}>
+    <TouchableOpacity
+      style={styles.usageItem}
+      onPress={() => {
+        if (item.partner?.id) {
+          router.push(`/partner/${item.partner.id}`);
+        }
+      }}
+      activeOpacity={0.7}
+    >
       <View style={styles.usageIcon}>
         <Text style={styles.partnerBadge}>{item.partner?.category || '—'}</Text>
       </View>
@@ -118,10 +128,17 @@ export default function DiscountsHistoryScreen() {
               au lieu de {formatAmount(item.amounts.original)}
             </Text>
           </View>
-          <Text style={styles.planBadgeSmall}>{item.plan?.toUpperCase?.()}</Text>
+          <View style={styles.rightSection}>
+            <Text style={styles.planBadgeSmall}>{item.plan?.toUpperCase?.()}</Text>
+            {item.partner?.id && (
+              <View style={styles.clickHint}>
+                <Ionicons name="chevron-forward" size={14} color={AppColors.primary} />
+              </View>
+            )}
+          </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const isEmpty = !loading && history.length === 0 && !error;
@@ -343,6 +360,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: AppColors.textSecondary,
     textTransform: 'uppercase',
+  },
+
+  rightSection: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+
+  clickHint: {
+    padding: 4,
   },
   emptyContainer: {
     marginTop: 40,

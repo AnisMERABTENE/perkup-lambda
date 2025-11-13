@@ -54,7 +54,15 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
   }
 
   const renderUsageItem = ({ item, index }: { item: any; index: number }) => (
-    <View style={styles.usageItem}>
+    <TouchableOpacity
+      style={styles.usageItem}
+      onPress={() => {
+        if (item.partner?.id) {
+          router.push(`/partner/${item.partner.id}`);
+        }
+      }}
+      activeOpacity={0.7}
+    >
       <View style={styles.usageIcon}>
         <Ionicons name="checkmark-circle" size={24} color={AppColors.success} />
       </View>
@@ -116,10 +124,15 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
             <Ionicons name="shield-checkmark" size={12} color={AppColors.success} />
             <Text style={styles.usageStatusText}>{formatAmount(item.amounts.savings)} économisés</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={AppColors.textSecondary} />
+          {item.partner?.id && (
+            <View style={styles.clickHint}>
+              <Text style={styles.clickHintText}>Voir le magasin</Text>
+              <Ionicons name="chevron-forward" size={16} color={AppColors.primary} />
+            </View>
+          )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -302,6 +315,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: AppColors.success,
+  },
+
+  clickHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  clickHintText: {
+    fontSize: 11,
+    color: AppColors.primary,
+    fontWeight: '500',
   },
 
   storeInfo: {
