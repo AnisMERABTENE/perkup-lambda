@@ -58,11 +58,20 @@ export const GET_CARD_USAGE_HISTORY = gql`
           usedAt
           token
           plan
+          validationDate
+          discountApplied
           partner {
             id
             name
             category
             address
+            logo
+            isActive
+          }
+          validator {
+            id
+            name
+            businessName
           }
           amounts {
             original
@@ -89,11 +98,20 @@ export const GET_CARD_VALIDATION_HISTORY = gql`
         usedAt
         token
         plan
+        validationDate
+        discountApplied
         partner {
           id
           name
           category
           address
+          logo
+          isActive
+        }
+        validator {
+          id
+          name
+          businessName
         }
         amounts {
           original
@@ -160,11 +178,20 @@ export interface CardUsageData {
     usedAt: string;
     token: string;
     plan: string;
+    validationDate: string | null;
+    discountApplied: number;
     partner: {
       id: string | null;
       name: string | null;
       category: string | null;
       address: string | null;
+      logo: string | null;
+      isActive: boolean | null;
+    } | null;
+    validator: {
+      id: string | null;
+      name: string | null;
+      businessName: string | null;
     } | null;
     amounts: {
       original: number;
@@ -196,11 +223,20 @@ export interface CardValidationRecord {
   usedAt: string | null;
   token: string | null;
   plan: string;
+  validationDate: string | null;
+  discountApplied: number;
   partner: {
     id: string | null;
     name: string | null;
     category: string | null;
     address: string | null;
+    logo: string | null;
+    isActive: boolean | null;
+  } | null;
+  validator: {
+    id: string | null;
+    name: string | null;
+    businessName: string | null;
   } | null;
   amounts: {
     original: number;

@@ -103,7 +103,12 @@ export default function DiscountsHistoryScreen() {
       </View>
       <View style={styles.usageInfo}>
         <View style={styles.usageHeader}>
-          <Text style={styles.usageTitle}>{item.partner?.name || 'Réduction'}</Text>
+          <Text style={styles.usageTitle}>
+            {item.partner?.name || 
+             item.validator?.businessName || 
+             item.validator?.name || 
+             'Magasin inconnu'}
+          </Text>
           <Text style={styles.usageDate}>{formatDate(item.usedAt)}</Text>
         </View>
         <View style={styles.usageDetails}>

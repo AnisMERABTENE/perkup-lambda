@@ -38,8 +38,11 @@ const digitalCardTypeDefs = `
     usedAt: String!
     token: String!
     partner: UsagePartner
+    validator: UsageValidator
     amounts: UsageAmount!
     plan: String!
+    validationDate: String
+    discountApplied: Int!
   }
 
   type UsagePartner {
@@ -47,6 +50,14 @@ const digitalCardTypeDefs = `
     name: String
     category: String
     address: String
+    logo: String
+    isActive: Boolean
+  }
+  
+  type UsageValidator {
+    id: ID
+    name: String
+    businessName: String
   }
 
   type UsageAmount {
@@ -73,8 +84,11 @@ const digitalCardTypeDefs = `
     usedAt: String
     token: String
     partner: UsagePartner
+    validator: UsageValidator
     amounts: UsageAmount!
     plan: String!
+    validationDate: String
+    discountApplied: Int!
   }
 
   type CardValidationHistory {

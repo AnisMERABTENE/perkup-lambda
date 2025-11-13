@@ -169,17 +169,33 @@ export const getCardUsageHistoryHandler = async (event) => {
       throw new Error('Aucune carte digitale trouvée');
     }
 
+    console.log('=== DEBUG: Récupération historique carte ===');
+    console.log('User ID:', userId);
+    
     const [recentCoupons, totalCoupons, totalSavings] = await Promise.all([
       Coupon.find({ user: userId, digitalCardValidation: true })
         .sort({ usedAt: -1 })
         .limit(10)
-        .populate('partner'),
+        .populate('partner', 'name category address logo owner isActive')
+        .populate('validatedBy', 'firstname lastname businessName'),
       Coupon.countDocuments({ user: userId, digitalCardValidation: true }),
       Coupon.aggregate([
         { $match: { user: digitalCard.user, digitalCardValidation: true } },
         { $group: { _id: null, total: { $sum: { $ifNull: ['$discountAmount', 0] } } } }
       ])
     ]);
+    
+    console.log('Nombre de coupons trouvés:', recentCoupons.length);
+    console.log('Premier coupon (debug):');
+    if (recentCoupons.length > 0) {
+      console.log('- ID:', recentCoupons[0]._id);
+      console.log('- Partner field:', recentCoupons[0].partner);
+      console.log('- Partner populated:', !!recentCoupons[0].partner);
+      if (recentCoupons[0].partner) {
+        console.log('- Partner name:', recentCoupons[0].partner.name);
+      }
+      console.log('- ValidatedBy:', recentCoupons[0].validatedBy);
+    }
 
     const totalSavingsValue = totalSavings?.[0]?.total || 0;
     
@@ -203,6 +219,22 @@ export const getCardUsageHistoryHandler = async (event) => {
             ? coupon.qrCode.replace(/.(?=.{2})/g, '*')
             : '********';
           const partnerDoc = coupon.partner;
+          const validatorDoc = coupon.validatedBy;
+          
+          // Formater l'adresse si elle existe
+          let addressString = null;
+          if (partnerDoc?.address) {
+            if (typeof partnerDoc.address === 'string') {
+              addressString = partnerDoc.address;
+            } else if (partnerDoc.address.street || partnerDoc.address.city) {
+              const addressParts = [];
+              if (partnerDoc.address.street) addressParts.push(partnerDoc.address.street);
+              if (partnerDoc.address.city) addressParts.push(partnerDoc.address.city);
+              if (partnerDoc.address.zipCode) addressParts.push(partnerDoc.address.zipCode);
+              addressString = addressParts.join(', ');
+            }
+          }
+          
           return {
             usedAt: coupon.usedAt || coupon.updatedAt,
             token: maskedToken,
@@ -211,7 +243,16 @@ export const getCardUsageHistoryHandler = async (event) => {
                   id: partnerDoc._id?.toString?.() || null,
                   name: partnerDoc.name,
                   category: partnerDoc.category,
-                  address: partnerDoc.address
+                  address: addressString,
+                  logo: partnerDoc.logo || null,
+                  isActive: partnerDoc.isActive
+                }
+              : null,
+            validator: validatorDoc
+              ? {
+                  id: validatorDoc._id?.toString?.() || null,
+                  name: validatorDoc.businessName || `${validatorDoc.firstname || ''} ${validatorDoc.lastname || ''}`.trim(),
+                  businessName: validatorDoc.businessName
                 }
               : null,
             amounts: {
@@ -220,7 +261,15 @@ export const getCardUsageHistoryHandler = async (event) => {
               final: coupon.finalAmount || 0,
               savings: coupon.discountAmount || 0
             },
-            plan: coupon.metadata?.userPlan || 'inconnu'
+            plan: coupon.metadata?.userPlan || 'inconnu',
+            validationDate: coupon.usedAt ? new Date(coupon.usedAt).toLocaleDateString('fr-FR', {
+              year: 'numeric',
+              month: 'long', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            }) : null,
+            discountApplied: coupon.discountApplied || 0
           };
         })
       },
@@ -260,6 +309,22 @@ export const getCardValidationHistoryHandler = async (event) => {
     }
   };
 
+  const lookupValidator = {
+    $lookup: {
+      from: 'users',
+      localField: 'validatedBy',
+      foreignField: '_id',
+      as: 'validator'
+    }
+  };
+
+  const unwindValidator = {
+    $unwind: {
+      path: '$validator',
+      preserveNullAndEmptyArrays: true
+    }
+  };
+
   const unwindPartner = {
     $unwind: {
       path: '$partner',
@@ -270,7 +335,9 @@ export const getCardValidationHistoryHandler = async (event) => {
   const matchPipeline = [
     { $match: baseMatch },
     lookupPartner,
-    unwindPartner
+    unwindPartner,
+    lookupValidator,
+    unwindValidator
   ];
 
   const matchWithCategory = categoryFilter
@@ -314,12 +381,26 @@ export const getCardValidationHistoryHandler = async (event) => {
   ];
 
   try {
+    console.log('=== DEBUG: Récupération historique complet ===');
+    console.log('User ID:', userId);
+    console.log('Category filter:', categoryFilter);
+    console.log('Page:', page, 'Limit:', limit);
+    
     const [historyResult, countResult, savingsResult, categoriesResult] = await Promise.all([
       Coupon.aggregate(historyPipeline),
       Coupon.aggregate(countPipeline),
       Coupon.aggregate(savingsPipeline),
       Coupon.aggregate(categoriesPipeline)
     ]);
+    
+    console.log('Résultats aggregation:');
+    console.log('- historyResult length:', historyResult.length);
+    console.log('- Premier résultat (debug):');
+    if (historyResult.length > 0) {
+      console.log('  - ID:', historyResult[0]._id);
+      console.log('  - Partner:', historyResult[0].partner);
+      console.log('  - Validator:', historyResult[0].validator);
+    }
 
     const total = countResult?.[0]?.total || 0;
     const totalSavings = savingsResult?.[0]?.total || 0;
@@ -329,6 +410,21 @@ export const getCardValidationHistoryHandler = async (event) => {
 
     const items = historyResult.map((coupon) => {
       const partnerDoc = coupon.partner;
+      const validatorDoc = coupon.validator;
+
+      // Formater l'adresse si elle existe
+      let addressString = null;
+      if (partnerDoc?.address) {
+        if (typeof partnerDoc.address === 'string') {
+          addressString = partnerDoc.address;
+        } else if (partnerDoc.address.street || partnerDoc.address.city) {
+          const addressParts = [];
+          if (partnerDoc.address.street) addressParts.push(partnerDoc.address.street);
+          if (partnerDoc.address.city) addressParts.push(partnerDoc.address.city);
+          if (partnerDoc.address.zipCode) addressParts.push(partnerDoc.address.zipCode);
+          addressString = addressParts.join(', ');
+        }
+      }
 
       return {
         id: coupon._id?.toString?.() || null,
@@ -339,7 +435,16 @@ export const getCardValidationHistoryHandler = async (event) => {
               id: partnerDoc._id?.toString?.() || null,
               name: partnerDoc.name,
               category: partnerDoc.category,
-              address: partnerDoc.address
+              address: addressString,
+              logo: partnerDoc.logo || null,
+              isActive: partnerDoc.isActive
+            }
+          : null,
+        validator: validatorDoc
+          ? {
+              id: validatorDoc._id?.toString?.() || null,
+              name: validatorDoc.businessName || `${validatorDoc.firstname || ''} ${validatorDoc.lastname || ''}`.trim(),
+              businessName: validatorDoc.businessName
             }
           : null,
         amounts: {
@@ -348,7 +453,15 @@ export const getCardValidationHistoryHandler = async (event) => {
           final: coupon.finalAmount || 0,
           savings: coupon.discountAmount || 0
         },
-        plan: coupon.metadata?.userPlan || 'inconnu'
+        plan: coupon.metadata?.userPlan || 'inconnu',
+        validationDate: coupon.usedAt ? new Date(coupon.usedAt).toLocaleDateString('fr-FR', {
+          year: 'numeric',
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }) : null,
+        discountApplied: coupon.discountApplied || 0
       };
     });
 

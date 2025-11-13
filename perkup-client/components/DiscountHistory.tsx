@@ -62,15 +62,41 @@ export default function DiscountHistory({ maxItems = 5 }: DiscountHistoryProps) 
       <View style={styles.usageInfo}>
         <View style={styles.usageHeader}>
           <Text style={styles.usageTitle}>
-            {item.partner?.name ? item.partner.name : 'Réduction utilisée'}
+            {item.partner?.name || 
+             item.validator?.businessName || 
+             item.validator?.name || 
+             'Magasin inconnu'}
           </Text>
           <View style={styles.dateBadges}>
-            <Text style={styles.usageDate}>{formatDate(item.usedAt)}</Text>
+            <Text style={styles.usageDate}>
+              {item.validationDate ? item.validationDate : formatDate(item.usedAt)}
+            </Text>
             {item.plan && (
               <Text style={styles.planBadge}>{item.plan?.toUpperCase?.()}</Text>
             )}
           </View>
         </View>
+        
+        {/* Informations du magasin */}
+        {item.partner?.category && (
+          <View style={styles.storeInfo}>
+            <Text style={styles.storeCategory}>{item.partner.category}</Text>
+            {item.partner.address && (
+              <Text style={styles.storeAddress} numberOfLines={1}>
+                📍 {item.partner.address}
+              </Text>
+            )}
+          </View>
+        )}
+        
+        {/* Informations du validateur */}
+        {item.validator?.name && (
+          <View style={styles.validatorInfo}>
+            <Text style={styles.validatorText}>
+              Validé par: {item.validator.name}
+            </Text>
+          </View>
+        )}
         
         <View style={styles.usageDetails}>
           <View style={styles.amountBlock}>
@@ -276,6 +302,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: AppColors.success,
+  },
+
+  storeInfo: {
+    marginVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: AppColors.surfaceSecondary,
+    borderRadius: 8,
+  },
+
+  storeCategory: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AppColors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  storeAddress: {
+    fontSize: 11,
+    color: AppColors.textSecondary,
+    marginTop: 2,
+  },
+
+  validatorInfo: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+
+  validatorText: {
+    fontSize: 11,
+    color: AppColors.textLight,
+    fontStyle: 'italic',
   },
 
 

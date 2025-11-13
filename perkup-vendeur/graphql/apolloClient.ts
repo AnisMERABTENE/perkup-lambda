@@ -2,7 +2,8 @@ import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/clien
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import { RetryLink } from '@apollo/client/link/retry';
-import { getAuthToken } from '@/utils/storage';
+import { getAuthToken, saveStoreData } from '@/utils/storage';
+import { GET_VENDOR_PROFILE, VendorProfileResponse } from './queries/vendor';
 
 // 🌐 Configuration GraphQL pour vendeur - Backend AWS
 const httpLink = createHttpLink({
@@ -107,10 +108,43 @@ export const clearAuthCache = () => {
 
 export const preloadVendorData = async (vendorId: string) => {
   try {
-    // Précharger les données critiques du vendeur
     console.log('Préchargement données vendeur:', vendorId);
+    
+    // Récupérer le profil vendeur avec ses magasins
+    const { data } = await apolloClient.query<VendorProfileResponse>({
+      query: GET_VENDOR_PROFILE,
+      fetchPolicy: 'network-only' // Toujours récupérer les dernières données
+    });
+    
+    if (data?.getVendorProfile?.stores?.length > 0) {
+      // Prendre le premier magasin du vendeur (la plupart ont un seul magasin)
+      const store = data.getVendorProfile.stores[0];
+      
+      const storeData = {
+        id: store.id,
+        name: store.name,
+        category: store.category,
+        address: store.address,
+        phone: store.phone,
+        discount: store.discount,
+        description: store.description,
+        logo: store.logo,
+        location: {
+          latitude: store.location?.latitude || 0,
+          longitude: store.location?.longitude || 0
+        }
+      };
+      
+      // Sauvegarder les données du magasin
+      await saveStoreData(storeData);
+      
+      console.log('✅ Données magasin sauvegardées:', storeData.name, 'ID:', storeData.id);
+    } else {
+      console.warn('⚠️ Aucun magasin trouvé pour ce vendeur');
+    }
+    
   } catch (error) {
-    console.error('Erreur préchargement:', error);
+    console.error('❌ Erreur préchargement données vendeur:', error);
   }
 };
 

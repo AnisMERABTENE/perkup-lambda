@@ -131,6 +131,18 @@ export default function DashboardScreen() {
       return;
     }
 
+    // Debug logging pour identifier le problème
+    console.log('🔍 DEBUG VALIDATION:');
+    console.log('- storeData:', storeData);
+    console.log('- storeData.id:', storeData?.id);
+    console.log('- partnerId qui sera envoyé:', storeData?.id ?? 'undefined');
+    
+    if (!storeData?.id) {
+      console.warn('⚠️ ATTENTION: Aucun partnerId trouvé dans storeData!');
+      setScanError('Erreur configuration boutique. Veuillez vous reconnecter.');
+      return;
+    }
+
     setScanError(null);
 
     try {
@@ -139,16 +151,22 @@ export default function DashboardScreen() {
           input: {
             scannedToken,
             amount: amountValue,
-            partnerId: storeData?.id ?? undefined,
+            partnerId: storeData.id, // Suppression du fallback undefined
           },
         },
       });
 
       if (data?.validateDigitalCard) {
         setValidationResult(data.validateDigitalCard);
+        console.log('✅ Validation réussie avec partnerId:', storeData.id);
       }
     } catch (error: any) {
       console.error('❌ Erreur validation carte:', error);
+      console.error('❌ Variables envoyées:', {
+        scannedToken,
+        amount: amountValue,
+        partnerId: storeData.id
+      });
 
       const gqlMessage =
         error?.graphQLErrors?.[0]?.message ||
@@ -157,7 +175,7 @@ export default function DashboardScreen() {
 
       setScanError(gqlMessage);
     }
-  }, [amount, scannedToken, storeData?.id, validateCardMutation]);
+  }, [amount, scannedToken, storeData, validateCardMutation]);
 
   const handleResetValidation = useCallback(() => {
     setScannedToken(null);
